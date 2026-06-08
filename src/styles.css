@@ -1,0 +1,198 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+/* =========================================================================
+   نظام التقارير الطبية لرخص الصيد — منصة صحة
+   Design tokens — Carbon-style ramp + هوية صحة (Teal/Green) + RTL helpers
+   ========================================================================= */
+
+:root {
+  /* Brand — صحة teal/green ramp (10 → 100, light → dark) */
+  --brand-10: #e7f5f1;
+  --brand-20: #c7e8df;
+  --brand-50: #2ba89b;
+  --brand-60: #1b9183;
+  --brand-70: #16796d;
+  --brand-80: #126358;
+  --brand-90: #0e4d45;
+  --brand-100: #0a3b35;
+
+  /* Ink — neutral gray ramp (Carbon Gray) */
+  --ink-10: #f4f5f6;
+  --ink-20: #e0e2e5;
+  --ink-30: #c6c9cd;
+  --ink-40: #a8acb2;
+  --ink-50: #8a8f96;
+  --ink-60: #697077;
+  --ink-70: #525860;
+  --ink-80: #393f45;
+  --ink-90: #262a2e;
+  --ink-95: #1a1d20;
+  --ink-100: #121417;
+
+  /* Success — green */
+  --ok-50: #e7f7ee;
+  --ok-100: #c2edd3;
+  --ok-600: #16a34a;
+  --ok-700: #15803d;
+
+  /* Warning — amber */
+  --warn-50: #fff7e6;
+  --warn-100: #fcecc2;
+  --warn-600: #d97706;
+  --warn-700: #b45309;
+
+  /* Error — red (Carbon red) */
+  --err-50: #fdecec;
+  --err-100: #fbd3d3;
+  --err-600: #da1e28;
+  --err-700: #b81922;
+
+  /* Radii */
+  --r-md: 8px;
+  --r-lg: 12px;
+  --r-2xl: 20px;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(18, 20, 23, 0.06), 0 1px 3px rgba(18, 20, 23, 0.04);
+  --shadow-md: 0 8px 24px -8px rgba(18, 20, 23, 0.18);
+  --shadow-lg: 0 24px 56px -20px rgba(18, 20, 23, 0.32);
+
+  /* ---- shadcn/ui token mapping (so existing ui/* components stay usable) ---- */
+  --radius: var(--r-md);
+  --background: #ffffff;
+  --foreground: var(--ink-90);
+  --card: #ffffff;
+  --card-foreground: var(--ink-90);
+  --popover: #ffffff;
+  --popover-foreground: var(--ink-90);
+  --primary: var(--brand-90);
+  --primary-foreground: #ffffff;
+  --secondary: var(--ink-10);
+  --secondary-foreground: var(--ink-90);
+  --muted: var(--ink-10);
+  --muted-foreground: var(--ink-60);
+  --accent: var(--brand-10);
+  --accent-foreground: var(--brand-90);
+  --destructive: var(--err-600);
+  --destructive-foreground: #ffffff;
+  --border: var(--ink-20);
+  --input: var(--ink-20);
+  --ring: var(--brand-60);
+}
+
+/* Tailwind v4 theme bridge — expose tokens as utilities (bg-primary, etc.) */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: var(--r-lg);
+  --radius-xl: var(--r-2xl);
+
+  --font-sans:
+    "Cairo", "IBM Plex Sans Arabic", "IBM Plex Sans", system-ui, -apple-system,
+    "Segoe UI", sans-serif;
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    margin: 0;
+    background: var(--ink-10);
+    color: var(--ink-90);
+    font-family:
+      "Cairo", "IBM Plex Sans Arabic", "IBM Plex Sans", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* أرقام/أكواد/تواريخ دائمًا LTR مع أرقام منتظمة العرض */
+  .num {
+    font-family: "IBM Plex Sans", "Cairo", system-ui, sans-serif;
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
+    direction: ltr;
+    unicode-bidi: isolate;
+  }
+
+  /* قلب الأيقونات الاتجاهية في وضع RTL */
+  [dir="rtl"] .rtl-flip {
+    transform: scaleX(-1);
+  }
+
+  ::selection {
+    background: var(--brand-20);
+    color: var(--brand-100);
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--ink-30);
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--ink-40);
+    background-clip: content-box;
+  }
+}
+
+/* =========================================================================
+   الطباعة — UC09: صفحة A4، إخفاء كل ما هو ديكور للتطبيق
+   ========================================================================= */
+@media print {
+  @page {
+    size: A4;
+    margin: 14mm;
+  }
+
+  html,
+  body {
+    background: #ffffff !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .print-area {
+    box-shadow: none !important;
+    border: none !important;
+  }
+
+  /* تجنّب قطع الأقسام بين الصفحات */
+  .print-block {
+    break-inside: avoid;
+  }
+}
