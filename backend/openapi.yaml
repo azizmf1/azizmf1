@@ -1,0 +1,471 @@
+openapi: 3.1.0
+info:
+  title: واجهة برمجة التقارير الطبية لرخص الصيد — منصة صحة
+  description: >
+    واجهة برمجية لإصدار وتدقيق التقارير الطبية لرخص الصيد. تتطلب جميع نقاط
+    التقارير مصادقة JWT. تدفّق الدخول: /auth/login ثم /auth/verify للحصول على
+    رمز الوصول.
+  version: 1.0.0
+  contact:
+    name: فريق منصة صحة
+    email: support@seha.sa
+  license:
+    name: Proprietary
+servers:
+  - url: https://api.seha.sa
+    description: الإنتاج
+  - url: http://localhost:5000
+    description: التطوير المحلي
+tags:
+  - name: Auth
+    description: المصادقة وإصدار رموز الوصول.
+  - name: Reports
+    description: إدارة التقارير الطبية لرخص الصيد.
+security:
+  - bearerAuth: []
+paths:
+  /api/auth/login:
+    post:
+      tags: [Auth]
+      operationId: login
+      summary: تسجيل الدخول بالاسم وكلمة المرور.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: تم قبول البيانات ويلزم رمز تحقق.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+        "401":
+          description: بيانات الدخول غير صحيحة.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+  /api/auth/verify:
+    post:
+      tags: [Auth]
+      operationId: verifyOtp
+      summary: التحقق من رمز OTP وإصدار رمز الوصول.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyOtpRequest"
+      responses:
+        "200":
+          description: تم إصدار رمز الوصول.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenResponse"
+        "401":
+          description: رمز التحقق غير صحيح.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+  /api/auth/me:
+    get:
+      tags: [Auth]
+      operationId: getCurrentUser
+      summary: بيانات المستخدم الحالي.
+      responses:
+        "200":
+          description: بيانات المستخدم.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserDto"
+        "401":
+          description: غير مصرّح.
+  /api/reports:
+    get:
+      tags: [Reports]
+      operationId: listReports
+      summary: قائمة التقارير مع تصفية بالحالة أو نص البحث.
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/ReportStatus"
+        - name: q
+          in: query
+          required: false
+          description: بحث بالاسم أو رقم الهوية أو المعرّف.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: قائمة ملخّصات التقارير.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ReportSummary"
+        "401":
+          description: غير مصرّح.
+        "403":
+          description: صلاحية غير كافية.
+    post:
+      tags: [Reports]
+      operationId: createReport
+      summary: إنشاء تقرير جديد (مسودة) — للطبيب فقط.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SaveReportRequest"
+      responses:
+        "201":
+          description: تم إنشاء التقرير.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Report"
+        "401":
+          description: غير مصرّح.
+        "403":
+          description: صلاحية غير كافية.
+  /api/reports/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags: [Reports]
+      operationId: getReport
+      summary: عرض تقرير واحد بالتفصيل.
+      responses:
+        "200":
+          description: تفاصيل التقرير.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Report"
+        "404":
+          description: التقرير غير موجود.
+    put:
+      tags: [Reports]
+      operationId: updateReport
+      summary: تعديل تقرير (مسودة أو مُعاد) — للطبيب فقط.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SaveReportRequest"
+      responses:
+        "200":
+          description: تم التحديث.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Report"
+        "403":
+          description: صلاحية غير كافية.
+        "404":
+          description: التقرير غير موجود.
+  /api/reports/{id}/submit:
+    post:
+      tags: [Reports]
+      operationId: submitReport
+      summary: إرسال التقرير للتدقيق — للطبيب فقط.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: تم الإرسال.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Report"
+        "400":
+          description: حالة غير صالحة للإرسال.
+        "403":
+          description: صلاحية غير كافية.
+        "404":
+          description: التقرير غير موجود.
+  /api/reports/{id}/audit:
+    post:
+      tags: [Reports]
+      operationId: auditReport
+      summary: اعتماد أو إعادة التقرير — للمدقّق فقط.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuditRequest"
+      responses:
+        "200":
+          description: تم تنفيذ القرار.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Report"
+        "400":
+          description: قرار غير صالح أو حالة غير قابلة للتدقيق.
+        "403":
+          description: صلاحية غير كافية.
+        "404":
+          description: التقرير غير موجود.
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    ProblemDetails:
+      type: object
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+    ReportStatus:
+      type: string
+      enum: [draft, submitted, under_review, approved, returned]
+    FitnessResult:
+      type: [string, "null"]
+      enum: [fit, unfit, null]
+    LoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+          format: password
+    LoginResponse:
+      type: object
+      required: [requiresOtp, message]
+      properties:
+        requiresOtp:
+          type: boolean
+        message:
+          type: string
+    VerifyOtpRequest:
+      type: object
+      required: [username, otp]
+      properties:
+        username:
+          type: string
+        otp:
+          type: string
+    UserDto:
+      type: object
+      required: [id, username, name, role, org, email]
+      properties:
+        id:
+          type: string
+          format: uuid
+        username:
+          type: string
+        name:
+          type: string
+        role:
+          type: string
+          enum: [doctor, auditor, admin]
+        org:
+          type: string
+        email:
+          type: string
+          format: email
+    TokenResponse:
+      type: object
+      required: [token, user]
+      properties:
+        token:
+          type: string
+        user:
+          $ref: "#/components/schemas/UserDto"
+    Applicant:
+      type: object
+      required: [name, nationalId]
+      properties:
+        name:
+          type: string
+        nationalId:
+          type: string
+          pattern: "^[0-9]{10}$"
+        dob:
+          type: string
+        gender:
+          type: string
+        nationality:
+          type: string
+        phone:
+          type: string
+        city:
+          type: string
+        bloodType:
+          type: string
+    Vitals:
+      type: object
+      properties:
+        height:
+          type: string
+        weight:
+          type: string
+        bloodPressure:
+          type: string
+        pulse:
+          type: string
+    ExamItem:
+      type: object
+      required: [key, value]
+      properties:
+        key:
+          type: string
+        value:
+          type: string
+          enum: [passed, failed]
+        note:
+          type: [string, "null"]
+    TimelineEntry:
+      type: object
+      properties:
+        at:
+          type: string
+          format: date-time
+        actorId:
+          type: string
+          format: uuid
+        actorName:
+          type: string
+        action:
+          type: string
+        note:
+          type: [string, "null"]
+    ReportSummary:
+      type: object
+      required: [id, referenceNo, status]
+      properties:
+        id:
+          type: string
+          format: uuid
+        referenceNo:
+          type: string
+        status:
+          $ref: "#/components/schemas/ReportStatus"
+        applicantName:
+          type: string
+        nationalId:
+          type: string
+        licenseType:
+          type: string
+        result:
+          $ref: "#/components/schemas/FitnessResult"
+        updatedAt:
+          type: string
+          format: date-time
+    Report:
+      type: object
+      required: [id, referenceNo, status, applicant]
+      properties:
+        id:
+          type: string
+          format: uuid
+        referenceNo:
+          type: string
+        status:
+          $ref: "#/components/schemas/ReportStatus"
+        applicant:
+          $ref: "#/components/schemas/Applicant"
+        licenseType:
+          type: string
+        vitals:
+          $ref: "#/components/schemas/Vitals"
+        exams:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExamItem"
+        result:
+          $ref: "#/components/schemas/FitnessResult"
+        recommendation:
+          type: string
+        auditNote:
+          type: [string, "null"]
+        doctorName:
+          type: string
+        doctorOrg:
+          type: string
+        auditorName:
+          type: [string, "null"]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        submittedAt:
+          type: [string, "null"]
+          format: date-time
+        decidedAt:
+          type: [string, "null"]
+          format: date-time
+        timeline:
+          type: array
+          items:
+            $ref: "#/components/schemas/TimelineEntry"
+    SaveReportRequest:
+      type: object
+      required: [applicant, licenseType, vitals, exams, recommendation]
+      properties:
+        applicant:
+          $ref: "#/components/schemas/Applicant"
+        licenseType:
+          type: string
+        vitals:
+          $ref: "#/components/schemas/Vitals"
+        exams:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExamItem"
+        result:
+          $ref: "#/components/schemas/FitnessResult"
+        recommendation:
+          type: string
+    AuditRequest:
+      type: object
+      required: [decision]
+      properties:
+        decision:
+          type: string
+          enum: [approve, return]
+        note:
+          type: [string, "null"]

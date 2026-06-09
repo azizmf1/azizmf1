@@ -1,0 +1,43 @@
+# مرجع خط البناء لـ .NET 10 — يقابل قالب المؤسسة net10.yaml.
+# يبني الحل، يشغّل الاختبارات (وحدة + تكامل Testcontainers) ويفرض تغطية 20%.
+# ملاحظة: اختبارات التكامل تحتاج Docker متاحًا على العامل (ubuntu-latest يوفّره).
+
+trigger:
+  branches:
+    include:
+      - main
+      - develop
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  buildConfiguration: Release
+  dotnetVersion: 10.0.x
+  solution: backend/Seha.HuntingMedical.sln
+
+steps:
+  - task: UseDotNet@2
+    displayName: تثبيت .NET 10 SDK
+    inputs:
+      packageType: sdk
+      version: $(dotnetVersion)
+
+  - script: dotnet restore $(solution)
+    displayName: استرجاع الحزم
+
+  - script: dotnet build $(solution) -c $(buildConfiguration) --no-restore
+    displayName: البناء
+
+  - script: >
+      dotnet test $(solution)
+      -c $(buildConfiguration) --no-build
+      --collect:"XPlat Code Coverage"
+      --settings backend/coverlet.runsettings
+      --logger trx
+    displayName: الاختبارات + التغطية (الحد الأدنى 20%)
+
+  - task: PublishCodeCoverageResults@2
+    displayName: نشر تقرير التغطية
+    inputs:
+      summaryFileLocation: '$(Agent.TempDirectory)/**/coverage.cobertura.xml'

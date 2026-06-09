@@ -1,0 +1,13 @@
+## .NET build output
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+*.user
+.vs/
+
+## Test results & coverage
+TestResults/
+[Cc]overage/
+coverage*.xml
+*.trx
