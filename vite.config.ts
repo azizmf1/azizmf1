@@ -1,9 +1,11 @@
 import { defineConfig } from "vite";
 import tsConfigPaths from "vite-tsconfig-paths";
-import { tanstackStart } from "@tanstack/react-start/plugin/vite";
+import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import viteReact from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 
+// تطبيق SPA ثابت: TanStack Router (file-based) + React + Tailwind + Vite.
+// المخرجات في dist/ — يُقدَّم كموقع ثابت على أي مستضيف.
 export default defineConfig({
   server: {
     port: 3000,
@@ -12,7 +14,7 @@ export default defineConfig({
   plugins: [
     tsConfigPaths({ projects: ["./tsconfig.json"] }),
     tailwindcss(),
-    tanstackStart({ customViteReactPlugin: true, target: "vercel" }),
+    tanstackRouter({ target: "react", autoCodeSplitting: true }),
     viteReact(),
   ],
 });
