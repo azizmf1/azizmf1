@@ -1,26 +1,38 @@
 openapi: 3.1.0
 info:
-  title: واجهة برمجة التقارير الطبية لرخص الصيد — منصة صحة
+  title: SEHA Hunting-License Medical Reports API
   description: >
-    واجهة برمجية لإصدار وتدقيق التقارير الطبية لرخص الصيد. تتطلب جميع نقاط
-    التقارير مصادقة JWT. تدفّق الدخول: /auth/login ثم /auth/verify للحصول على
-    رمز الوصول.
-  version: 1.0.0
+    REST API for issuing, auditing, and printing the medical fitness reports
+    required for hunting licences on the SEHA platform. The system is bilingual
+    (ar-SA / en-US). All report endpoints require a JWT bearer token obtained
+    via the /api/auth/login then /api/auth/verify flow. Rate limiting,
+    conditional requests (ETag), and idempotent writes are supported.
+  version: 1.1.0
   contact:
-    name: فريق منصة صحة
+    name: SEHA Platform Team
     email: support@seha.sa
+    url: https://developer.seha.sa
   license:
-    name: Proprietary
+    name: Proprietary — SEHA
+    url: https://seha.sa/legal/api-license
 servers:
+  - url: https://api.dev.seha.sa
+    description: Development environment (integration & feature work).
+    x-environment: development
+  - url: https://api.test.seha.sa
+    description: Testing/QA environment (automated and manual test runs).
+    x-environment: testing
+  - url: https://api.staging.seha.sa
+    description: Staging environment (pre-production validation).
+    x-environment: staging
   - url: https://api.seha.sa
-    description: الإنتاج
-  - url: http://localhost:5000
-    description: التطوير المحلي
+    description: Production environment.
+    x-environment: production
 tags:
   - name: Auth
-    description: المصادقة وإصدار رموز الوصول.
+    description: Authentication and access-token issuance.
   - name: Reports
-    description: إدارة التقارير الطبية لرخص الصيد.
+    description: Lifecycle management of hunting-licence medical reports.
 security:
   - bearerAuth: []
 paths:
@@ -28,8 +40,14 @@ paths:
     post:
       tags: [Auth]
       operationId: login
-      summary: تسجيل الدخول بالاسم وكلمة المرور.
+      summary: Authenticate with username and password.
+      description: >
+        Validates credentials and, on success, signals that a one-time
+        verification code is required to complete authentication.
       security: []
+      x-timeout: 10000
+      parameters:
+        - $ref: "#/components/parameters/AcceptLanguage"
       requestBody:
         required: true
         content:
@@ -38,23 +56,32 @@ paths:
               $ref: "#/components/schemas/LoginRequest"
       responses:
         "200":
-          description: تم قبول البيانات ويلزم رمز تحقق.
+          description: Credentials accepted; OTP verification required.
+          headers:
+            RateLimit-Limit: { $ref: "#/components/headers/RateLimit-Limit" }
+            RateLimit-Remaining: { $ref: "#/components/headers/RateLimit-Remaining" }
+            RateLimit-Reset: { $ref: "#/components/headers/RateLimit-Reset" }
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/LoginResponse"
-        "401":
-          description: بيانات الدخول غير صحيحة.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetails"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        default: { $ref: "#/components/responses/Problem" }
   /api/auth/verify:
     post:
       tags: [Auth]
       operationId: verifyOtp
-      summary: التحقق من رمز OTP وإصدار رمز الوصول.
+      summary: Verify the OTP and issue an access token.
+      description: >
+        Verifies the one-time code for the given user and returns a signed JWT
+        access token plus the authenticated user profile.
       security: []
+      x-timeout: 10000
+      parameters:
+        - $ref: "#/components/parameters/AcceptLanguage"
       requestBody:
         required: true
         content:
@@ -63,65 +90,103 @@ paths:
               $ref: "#/components/schemas/VerifyOtpRequest"
       responses:
         "200":
-          description: تم إصدار رمز الوصول.
+          description: OTP verified; access token issued.
+          headers:
+            RateLimit-Limit: { $ref: "#/components/headers/RateLimit-Limit" }
+            RateLimit-Remaining: { $ref: "#/components/headers/RateLimit-Remaining" }
+            RateLimit-Reset: { $ref: "#/components/headers/RateLimit-Reset" }
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/TokenResponse"
-        "401":
-          description: رمز التحقق غير صحيح.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetails"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        default: { $ref: "#/components/responses/Problem" }
   /api/auth/me:
     get:
       tags: [Auth]
       operationId: getCurrentUser
-      summary: بيانات المستخدم الحالي.
+      summary: Get the currently authenticated user.
+      description: Returns the profile of the user bound to the bearer token.
+      x-timeout: 10000
+      parameters:
+        - $ref: "#/components/parameters/AcceptLanguage"
+        - $ref: "#/components/parameters/IfNoneMatch"
       responses:
         "200":
-          description: بيانات المستخدم.
+          description: The authenticated user's profile.
+          headers:
+            ETag: { $ref: "#/components/headers/ETag" }
+            Cache-Control: { $ref: "#/components/headers/Cache-Control" }
+            RateLimit-Limit: { $ref: "#/components/headers/RateLimit-Limit" }
+            RateLimit-Remaining: { $ref: "#/components/headers/RateLimit-Remaining" }
+            RateLimit-Reset: { $ref: "#/components/headers/RateLimit-Reset" }
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/UserDto"
-        "401":
-          description: غير مصرّح.
+        "304": { $ref: "#/components/responses/NotModified" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        default: { $ref: "#/components/responses/Problem" }
   /api/reports:
     get:
       tags: [Reports]
       operationId: listReports
-      summary: قائمة التقارير مع تصفية بالحالة أو نص البحث.
+      summary: List medical reports with filtering and pagination.
+      description: >
+        Returns a paginated list of report summaries. Supports filtering by
+        status and a free-text query over applicant name, national id, and
+        reference number. Results are cacheable via ETag.
+      x-timeout: 15000
       parameters:
-        - name: status
-          in: query
-          required: false
-          schema:
-            $ref: "#/components/schemas/ReportStatus"
-        - name: q
-          in: query
-          required: false
-          description: بحث بالاسم أو رقم الهوية أو المعرّف.
-          schema:
-            type: string
+        - $ref: "#/components/parameters/AcceptLanguage"
+        - $ref: "#/components/parameters/StatusFilter"
+        - $ref: "#/components/parameters/SearchQuery"
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/PageSizeParam"
+        - $ref: "#/components/parameters/IfNoneMatch"
       responses:
         "200":
-          description: قائمة ملخّصات التقارير.
+          description: A paginated page of report summaries.
+          headers:
+            ETag: { $ref: "#/components/headers/ETag" }
+            Cache-Control: { $ref: "#/components/headers/Cache-Control" }
+            X-Total-Count: { $ref: "#/components/headers/X-Total-Count" }
+            X-Page: { $ref: "#/components/headers/X-Page" }
+            X-Page-Size: { $ref: "#/components/headers/X-Page-Size" }
+            Link: { $ref: "#/components/headers/Link" }
+            RateLimit-Limit: { $ref: "#/components/headers/RateLimit-Limit" }
+            RateLimit-Remaining: { $ref: "#/components/headers/RateLimit-Remaining" }
+            RateLimit-Reset: { $ref: "#/components/headers/RateLimit-Reset" }
           content:
             application/json:
               schema:
                 type: array
+                minItems: 0
+                maxItems: 100
                 items:
                   $ref: "#/components/schemas/ReportSummary"
-        "401":
-          description: غير مصرّح.
-        "403":
-          description: صلاحية غير كافية.
+        "304": { $ref: "#/components/responses/NotModified" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        default: { $ref: "#/components/responses/Problem" }
     post:
       tags: [Reports]
       operationId: createReport
-      summary: إنشاء تقرير جديد (مسودة) — للطبيب فقط.
+      summary: Create a new report (draft).
+      description: >
+        Creates a new draft report owned by the authenticated doctor. The write
+        is idempotent via the Idempotency-Key header; replaying the same key
+        returns the originally created resource instead of a duplicate.
+      x-timeout: 30000
+      parameters:
+        - $ref: "#/components/parameters/AcceptLanguage"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -130,40 +195,67 @@ paths:
               $ref: "#/components/schemas/SaveReportRequest"
       responses:
         "201":
-          description: تم إنشاء التقرير.
+          description: The report was created.
+          headers:
+            Location: { $ref: "#/components/headers/Location" }
+            ETag: { $ref: "#/components/headers/ETag" }
+            RateLimit-Limit: { $ref: "#/components/headers/RateLimit-Limit" }
+            RateLimit-Remaining: { $ref: "#/components/headers/RateLimit-Remaining" }
+            RateLimit-Reset: { $ref: "#/components/headers/RateLimit-Reset" }
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Report"
-        "401":
-          description: غير مصرّح.
-        "403":
-          description: صلاحية غير كافية.
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        default: { $ref: "#/components/responses/Problem" }
   /api/reports/{id}:
-    parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
     get:
       tags: [Reports]
       operationId: getReport
-      summary: عرض تقرير واحد بالتفصيل.
+      summary: Get a single report by id.
+      description: Returns the full report. Cacheable via ETag / If-None-Match.
+      x-timeout: 15000
+      parameters:
+        - $ref: "#/components/parameters/AcceptLanguage"
+        - $ref: "#/components/parameters/ReportId"
+        - $ref: "#/components/parameters/IfNoneMatch"
       responses:
         "200":
-          description: تفاصيل التقرير.
+          description: The requested report.
+          headers:
+            ETag: { $ref: "#/components/headers/ETag" }
+            Cache-Control: { $ref: "#/components/headers/Cache-Control" }
+            RateLimit-Limit: { $ref: "#/components/headers/RateLimit-Limit" }
+            RateLimit-Remaining: { $ref: "#/components/headers/RateLimit-Remaining" }
+            RateLimit-Reset: { $ref: "#/components/headers/RateLimit-Reset" }
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Report"
-        "404":
-          description: التقرير غير موجود.
+        "304": { $ref: "#/components/responses/NotModified" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        default: { $ref: "#/components/responses/Problem" }
     put:
       tags: [Reports]
       operationId: updateReport
-      summary: تعديل تقرير (مسودة أو مُعاد) — للطبيب فقط.
+      summary: Update a report (draft or returned).
+      description: >
+        Replaces the editable fields of a report. Supports optimistic
+        concurrency via If-Match and idempotency via Idempotency-Key.
+      x-timeout: 30000
+      parameters:
+        - $ref: "#/components/parameters/AcceptLanguage"
+        - $ref: "#/components/parameters/ReportId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/IfMatch"
       requestBody:
         required: true
         content:
@@ -172,52 +264,75 @@ paths:
               $ref: "#/components/schemas/SaveReportRequest"
       responses:
         "200":
-          description: تم التحديث.
+          description: The updated report.
+          headers:
+            ETag: { $ref: "#/components/headers/ETag" }
+            RateLimit-Limit: { $ref: "#/components/headers/RateLimit-Limit" }
+            RateLimit-Remaining: { $ref: "#/components/headers/RateLimit-Remaining" }
+            RateLimit-Reset: { $ref: "#/components/headers/RateLimit-Reset" }
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Report"
-        "403":
-          description: صلاحية غير كافية.
-        "404":
-          description: التقرير غير موجود.
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "412": { $ref: "#/components/responses/PreconditionFailed" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        default: { $ref: "#/components/responses/Problem" }
   /api/reports/{id}/submit:
     post:
       tags: [Reports]
       operationId: submitReport
-      summary: إرسال التقرير للتدقيق — للطبيب فقط.
+      summary: Submit a report for auditing.
+      description: >
+        Transitions a draft or returned report to "submitted". Idempotent via
+        Idempotency-Key; supports optimistic concurrency via If-Match.
+      x-timeout: 30000
       parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
+        - $ref: "#/components/parameters/AcceptLanguage"
+        - $ref: "#/components/parameters/ReportId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/IfMatch"
       responses:
         "200":
-          description: تم الإرسال.
+          description: The submitted report.
+          headers:
+            ETag: { $ref: "#/components/headers/ETag" }
+            RateLimit-Limit: { $ref: "#/components/headers/RateLimit-Limit" }
+            RateLimit-Remaining: { $ref: "#/components/headers/RateLimit-Remaining" }
+            RateLimit-Reset: { $ref: "#/components/headers/RateLimit-Reset" }
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Report"
-        "400":
-          description: حالة غير صالحة للإرسال.
-        "403":
-          description: صلاحية غير كافية.
-        "404":
-          description: التقرير غير موجود.
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "412": { $ref: "#/components/responses/PreconditionFailed" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        default: { $ref: "#/components/responses/Problem" }
   /api/reports/{id}/audit:
     post:
       tags: [Reports]
       operationId: auditReport
-      summary: اعتماد أو إعادة التقرير — للمدقّق فقط.
+      summary: Approve or return a report (auditor only).
+      description: >
+        Records an audit decision (approve or return-with-note) on a submitted
+        or under-review report. Idempotent via Idempotency-Key; supports
+        optimistic concurrency via If-Match.
+      x-timeout: 30000
       parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
+        - $ref: "#/components/parameters/AcceptLanguage"
+        - $ref: "#/components/parameters/ReportId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/IfMatch"
       requestBody:
         required: true
         content:
@@ -226,246 +341,683 @@ paths:
               $ref: "#/components/schemas/AuditRequest"
       responses:
         "200":
-          description: تم تنفيذ القرار.
+          description: The report after the audit decision.
+          headers:
+            ETag: { $ref: "#/components/headers/ETag" }
+            RateLimit-Limit: { $ref: "#/components/headers/RateLimit-Limit" }
+            RateLimit-Remaining: { $ref: "#/components/headers/RateLimit-Remaining" }
+            RateLimit-Reset: { $ref: "#/components/headers/RateLimit-Reset" }
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Report"
-        "400":
-          description: قرار غير صالح أو حالة غير قابلة للتدقيق.
-        "403":
-          description: صلاحية غير كافية.
-        "404":
-          description: التقرير غير موجود.
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "412": { $ref: "#/components/responses/PreconditionFailed" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        default: { $ref: "#/components/responses/Problem" }
 components:
   securitySchemes:
     bearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
+      description: JWT bearer token issued by /api/auth/verify.
+  headers:
+    RateLimit-Limit:
+      description: Request quota for the current window.
+      schema: { type: integer, minimum: 0, maximum: 1000000 }
+    RateLimit-Remaining:
+      description: Remaining requests in the current window.
+      schema: { type: integer, minimum: 0, maximum: 1000000 }
+    RateLimit-Reset:
+      description: Seconds until the rate-limit window resets.
+      schema: { type: integer, minimum: 0, maximum: 86400 }
+    Retry-After:
+      description: Seconds the client should wait before retrying.
+      schema: { type: integer, minimum: 0, maximum: 86400 }
+    ETag:
+      description: Entity tag of the representation, for conditional requests.
+      schema: { type: string, minLength: 1, maxLength: 200 }
+    Cache-Control:
+      description: Caching directives for the response.
+      schema: { type: string, minLength: 1, maxLength: 200 }
+    Location:
+      description: Absolute URI of the newly created resource.
+      required: true
+      schema: { type: string, format: uri, minLength: 1, maxLength: 2048 }
+    X-Total-Count:
+      description: Total number of items across all pages.
+      schema: { type: integer, minimum: 0, maximum: 100000000 }
+    X-Page:
+      description: Current page number (1-based).
+      schema: { type: integer, minimum: 1, maximum: 100000000 }
+    X-Page-Size:
+      description: Number of items per page.
+      schema: { type: integer, minimum: 1, maximum: 100 }
+    Link:
+      description: RFC 8288 pagination links (next, prev, first, last).
+      schema: { type: string, minLength: 0, maxLength: 4096 }
+  parameters:
+    AcceptLanguage:
+      name: Accept-Language
+      in: header
+      required: false
+      description: Preferred response language (ar-SA or en-US).
+      schema:
+        type: string
+        enum: [ar-SA, en-US]
+        default: ar-SA
+        minLength: 5
+        maxLength: 5
+      x-languages: [ar-SA, en-US]
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: >
+        Client-generated UUID that makes the write idempotent; replaying the
+        same key returns the original result instead of duplicating the effect.
+      schema:
+        type: string
+        format: uuid
+        minLength: 36
+        maxLength: 36
+    IfMatch:
+      name: If-Match
+      in: header
+      required: false
+      description: Optimistic-concurrency precondition; must match the current ETag.
+      schema: { type: string, minLength: 1, maxLength: 200 }
+    IfNoneMatch:
+      name: If-None-Match
+      in: header
+      required: false
+      description: Conditional GET; returns 304 when the ETag matches.
+      schema: { type: string, minLength: 1, maxLength: 200 }
+    ReportId:
+      name: id
+      in: path
+      required: true
+      description: The unique identifier of the report.
+      schema: { type: string, format: uuid, minLength: 36, maxLength: 36 }
+    StatusFilter:
+      name: status
+      in: query
+      required: false
+      description: Filter by report status.
+      schema:
+        $ref: "#/components/schemas/ReportStatus"
+    SearchQuery:
+      name: q
+      in: query
+      required: false
+      description: Free-text search over applicant name, national id, or reference number.
+      schema: { type: string, minLength: 1, maxLength: 100 }
+      x-languages: [ar-SA, en-US]
+    PageParam:
+      name: page
+      in: query
+      required: false
+      description: Page number (1-based).
+      schema: { type: integer, minimum: 1, maximum: 100000000, default: 1 }
+    PageSizeParam:
+      name: pageSize
+      in: query
+      required: false
+      description: Number of items per page.
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+  responses:
+    Problem:
+      description: Unexpected error.
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/ProblemDetails" }
+    BadRequest:
+      description: Malformed request (syntactic).
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/ProblemDetails" }
+    Unauthorized:
+      description: Authentication is required or has failed.
+      headers:
+        RateLimit-Limit: { $ref: "#/components/headers/RateLimit-Limit" }
+        RateLimit-Remaining: { $ref: "#/components/headers/RateLimit-Remaining" }
+        RateLimit-Reset: { $ref: "#/components/headers/RateLimit-Reset" }
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/ProblemDetails" }
+    Forbidden:
+      description: The caller lacks permission for this action.
+      headers:
+        RateLimit-Limit: { $ref: "#/components/headers/RateLimit-Limit" }
+        RateLimit-Remaining: { $ref: "#/components/headers/RateLimit-Remaining" }
+        RateLimit-Reset: { $ref: "#/components/headers/RateLimit-Reset" }
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/ProblemDetails" }
+    NotFound:
+      description: The requested resource does not exist.
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/ProblemDetails" }
+    UnprocessableEntity:
+      description: The request is syntactically valid but semantically invalid.
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/ValidationProblemDetails" }
+    Conflict:
+      description: The request conflicts with current state (e.g., idempotency replay mismatch).
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/ProblemDetails" }
+    PreconditionFailed:
+      description: An If-Match precondition did not hold (stale ETag).
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/ProblemDetails" }
+    NotModified:
+      description: The representation has not changed (ETag matched).
+      headers:
+        ETag: { $ref: "#/components/headers/ETag" }
+        Cache-Control: { $ref: "#/components/headers/Cache-Control" }
+    TooManyRequests:
+      description: Rate limit exceeded.
+      headers:
+        Retry-After: { $ref: "#/components/headers/Retry-After" }
+        RateLimit-Limit: { $ref: "#/components/headers/RateLimit-Limit" }
+        RateLimit-Remaining: { $ref: "#/components/headers/RateLimit-Remaining" }
+        RateLimit-Reset: { $ref: "#/components/headers/RateLimit-Reset" }
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/ProblemDetails" }
   schemas:
     ProblemDetails:
       type: object
+      description: RFC 7807 problem details.
       properties:
         type:
           type: string
+          format: uri
+          description: A URI identifying the problem type.
+          minLength: 1
+          maxLength: 2048
         title:
           type: string
+          description: A short, human-readable summary of the problem.
+          minLength: 1
+          maxLength: 200
+          x-languages: [ar-SA, en-US]
         status:
           type: integer
+          description: The HTTP status code.
+          minimum: 100
+          maximum: 599
         detail:
           type: string
+          description: A human-readable explanation specific to this occurrence.
+          minLength: 0
+          maxLength: 2000
+          x-languages: [ar-SA, en-US]
+        instance:
+          type: string
+          format: uri
+          description: A URI identifying the specific occurrence.
+          minLength: 0
+          maxLength: 2048
+      required: [title, status]
+    ValidationProblemDetails:
+      type: object
+      description: Problem details extended with per-field validation errors.
+      properties:
+        type:
+          type: string
+          format: uri
+          description: A URI identifying the problem type.
+          minLength: 1
+          maxLength: 2048
+        title:
+          type: string
+          description: A short, human-readable summary of the problem.
+          minLength: 1
+          maxLength: 200
+          x-languages: [ar-SA, en-US]
+        status:
+          type: integer
+          description: The HTTP status code.
+          minimum: 100
+          maximum: 599
+        errors:
+          type: object
+          description: Map of field name to a list of validation messages.
+          additionalProperties:
+            type: array
+            minItems: 1
+            maxItems: 50
+            items:
+              type: string
+              minLength: 1
+              maxLength: 500
+              x-languages: [ar-SA, en-US]
+      required: [title, status, errors]
     ReportStatus:
       type: string
+      description: The lifecycle status of a report.
       enum: [draft, submitted, under_review, approved, returned]
     FitnessResult:
       type: [string, "null"]
+      description: The final medical fitness determination.
       enum: [fit, unfit, null]
     LoginRequest:
       type: object
-      required: [username, password]
+      description: Username/password credentials.
       properties:
         username:
           type: string
+          description: The account username.
+          minLength: 1
+          maxLength: 64
+          x-languages: [ar-SA, en-US]
         password:
           type: string
           format: password
+          description: The account password.
+          minLength: 1
+          maxLength: 128
+      required: [username, password]
     LoginResponse:
       type: object
-      required: [requiresOtp, message]
+      description: Result of a successful credential check.
       properties:
         requiresOtp:
           type: boolean
+          description: Whether OTP verification is required to complete sign-in.
         message:
           type: string
+          description: A human-readable status message.
+          minLength: 1
+          maxLength: 300
+          x-languages: [ar-SA, en-US]
+      required: [requiresOtp, message]
     VerifyOtpRequest:
       type: object
-      required: [username, otp]
+      description: OTP verification payload.
       properties:
         username:
           type: string
+          description: The account username.
+          minLength: 1
+          maxLength: 64
+          x-languages: [ar-SA, en-US]
         otp:
           type: string
+          description: The one-time verification code.
+          minLength: 4
+          maxLength: 8
+      required: [username, otp]
     UserDto:
       type: object
-      required: [id, username, name, role, org, email]
+      description: An authenticated user's public profile.
       properties:
         id:
           type: string
           format: uuid
+          description: The user identifier.
+          minLength: 36
+          maxLength: 36
         username:
           type: string
+          description: The account username.
+          minLength: 1
+          maxLength: 64
+          x-languages: [ar-SA, en-US]
         name:
           type: string
+          description: The user's display name.
+          minLength: 1
+          maxLength: 128
+          x-languages: [ar-SA, en-US]
         role:
           type: string
+          description: The user's role.
           enum: [doctor, auditor, admin]
         org:
           type: string
+          description: The user's organisation.
+          minLength: 0
+          maxLength: 256
+          x-languages: [ar-SA, en-US]
         email:
           type: string
           format: email
+          description: The user's email address.
+          minLength: 3
+          maxLength: 256
+      required: [id, username, name, role, org, email]
     TokenResponse:
       type: object
-      required: [token, user]
+      description: An issued access token with the user profile.
       properties:
         token:
           type: string
+          description: The signed JWT access token.
+          minLength: 1
+          maxLength: 4096
         user:
           $ref: "#/components/schemas/UserDto"
+      required: [token, user]
     Applicant:
       type: object
-      required: [name, nationalId]
+      description: The licence applicant's personal and contact details.
       properties:
         name:
           type: string
+          description: Full name of the applicant.
+          minLength: 1
+          maxLength: 128
+          x-languages: [ar-SA, en-US]
         nationalId:
           type: string
+          description: 10-digit national identifier.
           pattern: "^[0-9]{10}$"
+          minLength: 10
+          maxLength: 10
         dob:
           type: string
+          format: date
+          description: Date of birth (YYYY-MM-DD).
+          minLength: 10
+          maxLength: 10
         gender:
           type: string
+          description: Gender.
+          enum: ["male", "female", ""]
+          maxLength: 6
         nationality:
           type: string
+          description: Nationality lookup code.
+          minLength: 1
+          maxLength: 16
         phone:
           type: string
+          description: Saudi mobile number (05XXXXXXXX).
+          pattern: "^05[0-9]{8}$"
+          minLength: 10
+          maxLength: 10
         city:
           type: string
+          description: City lookup code.
+          minLength: 1
+          maxLength: 32
         bloodType:
           type: string
+          description: Blood type.
+          enum: ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-", ""]
+          maxLength: 3
+      required: [name, nationalId]
     Vitals:
       type: object
+      description: Vital-sign measurements at the time of examination.
       properties:
         height:
           type: string
+          description: Height in centimetres.
+          minLength: 0
+          maxLength: 3
         weight:
           type: string
+          description: Weight in kilograms.
+          minLength: 0
+          maxLength: 3
         bloodPressure:
           type: string
+          description: Blood pressure (systolic/diastolic).
+          minLength: 0
+          maxLength: 7
         pulse:
           type: string
+          description: Pulse in beats per minute.
+          minLength: 0
+          maxLength: 3
     ExamItem:
       type: object
-      required: [key, value]
+      description: The outcome of a single medical examination item.
       properties:
         key:
           type: string
+          description: The exam item key.
+          minLength: 1
+          maxLength: 32
         value:
           type: string
+          description: The exam outcome.
           enum: [passed, failed]
         note:
           type: [string, "null"]
+          description: Optional note for the exam item.
+          minLength: 0
+          maxLength: 500
+          x-languages: [ar-SA, en-US]
+      required: [key, value]
     TimelineEntry:
       type: object
+      description: An immutable action-log entry on a report.
       properties:
         at:
           type: string
           format: date-time
+          description: When the action occurred.
+          minLength: 20
+          maxLength: 40
         actorId:
           type: string
           format: uuid
+          description: The acting user's id.
+          minLength: 36
+          maxLength: 36
         actorName:
           type: string
+          description: The acting user's name.
+          minLength: 1
+          maxLength: 128
+          x-languages: [ar-SA, en-US]
         action:
           type: string
+          description: The action performed.
+          minLength: 1
+          maxLength: 128
+          x-languages: [ar-SA, en-US]
         note:
           type: [string, "null"]
+          description: Optional note attached to the action.
+          minLength: 0
+          maxLength: 2000
+          x-languages: [ar-SA, en-US]
+      required: [at, actorId, actorName, action]
     ReportSummary:
       type: object
-      required: [id, referenceNo, status]
+      description: A compact projection of a report for listings.
       properties:
         id:
           type: string
           format: uuid
+          description: The report id.
+          minLength: 36
+          maxLength: 36
         referenceNo:
           type: string
+          description: Human-readable reference number (HM-YYYY-NNNN).
+          minLength: 1
+          maxLength: 32
         status:
           $ref: "#/components/schemas/ReportStatus"
         applicantName:
           type: string
+          description: The applicant's name.
+          minLength: 0
+          maxLength: 128
+          x-languages: [ar-SA, en-US]
         nationalId:
           type: string
+          description: The applicant's national id.
+          minLength: 0
+          maxLength: 10
         licenseType:
           type: string
+          description: The licence type lookup code.
+          minLength: 0
+          maxLength: 32
         result:
           $ref: "#/components/schemas/FitnessResult"
         updatedAt:
           type: string
           format: date-time
+          description: When the report was last updated.
+          minLength: 20
+          maxLength: 40
+      required: [id, referenceNo, status]
     Report:
       type: object
-      required: [id, referenceNo, status, applicant]
+      description: A full hunting-licence medical report.
       properties:
         id:
           type: string
           format: uuid
+          description: The report id.
+          minLength: 36
+          maxLength: 36
         referenceNo:
           type: string
+          description: Human-readable reference number (HM-YYYY-NNNN).
+          minLength: 1
+          maxLength: 32
         status:
           $ref: "#/components/schemas/ReportStatus"
         applicant:
           $ref: "#/components/schemas/Applicant"
         licenseType:
           type: string
+          description: The licence type lookup code.
+          minLength: 1
+          maxLength: 32
         vitals:
           $ref: "#/components/schemas/Vitals"
         exams:
           type: array
+          description: The list of examination outcomes.
+          minItems: 0
+          maxItems: 32
           items:
             $ref: "#/components/schemas/ExamItem"
         result:
           $ref: "#/components/schemas/FitnessResult"
         recommendation:
           type: string
+          description: The clinical recommendation.
+          minLength: 0
+          maxLength: 2000
+          x-languages: [ar-SA, en-US]
         auditNote:
           type: [string, "null"]
+          description: The auditor's note (set when returned).
+          minLength: 0
+          maxLength: 2000
+          x-languages: [ar-SA, en-US]
         doctorName:
           type: string
+          description: The authoring doctor's name.
+          minLength: 0
+          maxLength: 128
+          x-languages: [ar-SA, en-US]
         doctorOrg:
           type: string
+          description: The authoring doctor's organisation.
+          minLength: 0
+          maxLength: 256
+          x-languages: [ar-SA, en-US]
         auditorName:
           type: [string, "null"]
+          description: The auditing user's name.
+          minLength: 0
+          maxLength: 128
+          x-languages: [ar-SA, en-US]
         createdAt:
           type: string
           format: date-time
+          description: Creation timestamp.
+          minLength: 20
+          maxLength: 40
         updatedAt:
           type: string
           format: date-time
+          description: Last-update timestamp.
+          minLength: 20
+          maxLength: 40
         submittedAt:
           type: [string, "null"]
           format: date-time
+          description: Submission timestamp.
+          minLength: 0
+          maxLength: 40
         decidedAt:
           type: [string, "null"]
           format: date-time
+          description: Audit-decision timestamp.
+          minLength: 0
+          maxLength: 40
         timeline:
           type: array
+          description: The immutable action log.
+          minItems: 0
+          maxItems: 200
           items:
             $ref: "#/components/schemas/TimelineEntry"
+      required: [id, referenceNo, status, applicant]
     SaveReportRequest:
       type: object
-      required: [applicant, licenseType, vitals, exams, recommendation]
+      description: Payload to create or update a report.
       properties:
         applicant:
           $ref: "#/components/schemas/Applicant"
         licenseType:
           type: string
+          description: The licence type lookup code.
+          minLength: 1
+          maxLength: 32
         vitals:
           $ref: "#/components/schemas/Vitals"
         exams:
           type: array
+          description: The list of examination outcomes.
+          minItems: 0
+          maxItems: 32
           items:
             $ref: "#/components/schemas/ExamItem"
         result:
           $ref: "#/components/schemas/FitnessResult"
         recommendation:
           type: string
+          description: The clinical recommendation.
+          minLength: 0
+          maxLength: 2000
+          x-languages: [ar-SA, en-US]
+      required: [applicant, licenseType, vitals, exams, recommendation]
     AuditRequest:
       type: object
-      required: [decision]
+      description: An audit decision payload.
       properties:
         decision:
           type: string
+          description: The audit decision.
           enum: [approve, return]
         note:
           type: [string, "null"]
+          description: Optional (approve) or required (return) note.
+          minLength: 0
+          maxLength: 2000
+          x-languages: [ar-SA, en-US]
+      required: [decision]

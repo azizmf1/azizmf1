@@ -529,17 +529,27 @@ graph TD
 
 ## 17. Build Pipeline & Standards Compliance
 
-| Mandate | Compliance |
-| --- | --- |
-| .NET 10 (`net10.yaml`) | `net10.0` TFM; `backend/pipeline/net10.yaml` reference |
-| Node 22 / end of Node 20 | `engines.node >= 22`, `.nvmrc` |
-| Unit tests ≥20% (rising) | Vitest (`npm test`) + Coverlet (`dotnet test`) |
-| Testcontainers | PostgreSQL integration tests |
-| OpenAPI validation | `openapi.yaml` (3.1) + built-in generation |
-| Elastic APM auto-inject | No APM package/config in code |
-| Database standards | PostgreSQL + EF Core (assumption — standard doc encrypted) |
+> **Verification note:** The authoring environment has **no .NET SDK** and **package
+> registries are blocked** (npm/nuget → 403), so `dotnet build/test`, `npm test`, and
+> `npm run lint` **could not be executed here**. Items below marked **⏳ PENDING** are
+> implemented in code/config but **not yet built/tested**; run them in an environment with
+> .NET 10 SDK + Docker + registry access (Codespaces/CI). What *was* executed here: a Python
+> structural validation of `openapi.yaml` and an Elastic-APM `grep`.
 
-Full mapping in `STANDARDS.md`.
+| Mandate | Status | Compliance |
+| --- | --- | --- |
+| OpenAPI validation | ✅ impl · partial check | `openapi.yaml` 1.1.0 hardened; **0 Critical / 0 High** on the Python-checked subset. Official 55-rule tool (Spectral/Coderz): ⏳ PENDING |
+| Elastic APM auto-inject | ✅ **verified** | `grep` confirms no APM package/config anywhere |
+| .NET 10 (`net10.yaml`) | ✅ impl · ⏳ build | `net10.0` TFM; `backend/pipeline/net10.yaml` |
+| Node 22 / end of Node 20 | ✅ impl | `engines.node >= 22`, `.nvmrc` |
+| Coverage ≥20% (FE) | ⏳ PENDING | Scope widened to whole project; real % needs a run (likely <20% until UI tests added) |
+| Coverage ≥20% (BE) | ⏳ PENDING | Coverlet over full assembly; needs `dotnet test` |
+| Testcontainers | ✅ impl · ⏳ run | PostgreSQL integration tests |
+| Database standards | ⚠️ **unconfirmed assumption** | PostgreSQL chosen; standard doc encrypted — needs human confirmation (see §22 R3) |
+| Elastic APM residue | ✅ verified | none |
+
+Full, deviation-by-deviation mapping in `STANDARDS.md` (incl. the `x-languages`, EF-Migrations,
+and React-PascalCase documented deviations).
 
 ---
 
@@ -652,13 +662,16 @@ from the other later.
 
 | # | Item | Impact | Mitigation |
 | --- | --- | --- | --- |
-| R1 | Backend not yet compiled/verified (no SDK/offline in authoring env) | Build may need fixes | Build + `dotnet test` in a real env; fix package versions |
+| R1 | Backend/frontend **not built or tested** in authoring env (no SDK, blocked registries) | Compliance unverified | Run `dotnet build/test`, `npm test`, `npm run lint` in CI/Codespaces (⏳ PENDING) |
 | R2 | Package versions pinned to plausible 10.x | Restore failures | Align to feed's latest 10.x |
-| R3 | Database standard unread (encrypted doc) | Possible engine/standard mismatch | Confirm standard; revisit ADR-003 |
-| R4 | Frontend not wired to API | Two sources of truth | Execute §19 integration plan |
-| R5 | `EnsureCreated` instead of migrations | Prod schema management | Add EF migrations |
-| R6 | Demo OTP/credentials, HS256, permissive CORS | Not production-secure | Real OTP, RS256+rotation, scoped CORS, secret store |
-| R7 | No request validation framework | Weak input guarantees | Add FluentValidation / endpoint filters |
+| R3 | **Database standard unread (encrypted)** — PostgreSQL is an unconfirmed assumption | Possible engine/standard mismatch; affects `jsonb`, Testcontainers image, Npgsql | **Human confirmation required before any migration**; engine unchanged; impact list in `STANDARDS.md §3`; revisit ADR-003 |
+| R4 | OpenAPI checked only with a Python subset, not the official 55-rule tool | Hidden Critical/High possible | Run Spectral/Coderz validator on `openapi.yaml` (⏳ PENDING) |
+| R5 | Coverage scope widened to whole project; real % unmeasured and likely <20% | Coverage gate may fail | Add UI/component + endpoint tests; measure real % (⏳ PENDING) |
+| R6 | Frontend not wired to API; permission logic mirrored in two places | Drift risk | `shared/permissions.json` is now the SoT; auto-generate both sides in CI; execute §19 |
+| R7 | `EnsureCreated` instead of EF Migrations | Prod schema management | Add EF migrations (needs SDK — deferred); EF Migrations documented as the approved Liquibase/Flyway alternative |
+| R8 | Audit `Timeline` immutable by convention only | Tamperable in DB | Add DB triggers blocking UPDATE/DELETE in the first migration (deferred) |
+| R9 | Demo OTP/credentials, HS256, **permissive CORS** | Not production-secure | Real OTP, RS256+rotation, **mandatory** origin-scoped CORS in prod, secret store |
+| R10 | No request-validation framework (422 surfaced in OpenAPI, not yet enforced) | Weak input guarantees | Add FluentValidation / endpoint filters |
 
 ---
 

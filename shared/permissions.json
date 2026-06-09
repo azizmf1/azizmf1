@@ -1,0 +1,34 @@
+{
+  "$comment": "SINGLE SOURCE OF TRUTH for RBAC. Both the frontend (src/lib/permissions.ts) and the backend (backend/.../Domain/ReportPermissions.cs) MUST stay consistent with this matrix. Future work: generate TS types and a C# constant from this file in CI to prevent drift (tracked in STANDARDS.md §6).",
+  "version": 1,
+  "actions": [
+    "report:list",
+    "report:view",
+    "report:create",
+    "report:edit",
+    "report:submit",
+    "report:delete",
+    "report:audit"
+  ],
+  "roles": {
+    "doctor": [
+      "report:list",
+      "report:view",
+      "report:create",
+      "report:edit",
+      "report:submit",
+      "report:delete"
+    ],
+    "auditor": ["report:list", "report:view", "report:audit"],
+    "admin": ["report:list", "report:view"]
+  },
+  "resourceRules": {
+    "report:edit": { "requiresRole": "doctor", "statusIn": ["draft", "returned"] },
+    "report:submit": { "requiresRole": "doctor", "statusIn": ["draft", "returned"] },
+    "report:delete": { "requiresRole": "doctor", "statusIn": ["draft"] },
+    "report:audit": {
+      "requiresRole": "auditor",
+      "statusIn": ["submitted", "under_review"]
+    }
+  }
+}

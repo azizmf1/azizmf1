@@ -12,9 +12,21 @@ export default defineConfig({
     include: ["src/**/*.test.ts"],
     coverage: {
       provider: "v8",
-      include: ["src/lib/**", "src/data/**"],
-      exclude: ["**/*.test.ts", "**/*.d.ts"],
+      // النطاق يطابق ما يقيسه الـ pipeline على المشروع كاملًا (لا مجلدات مختارة).
+      // يُستثنى المُولَّد ونقاط الدخول وملفات الاختبار فقط.
+      all: true,
+      include: ["src/**/*.{ts,tsx}"],
+      exclude: [
+        "**/*.test.ts",
+        "**/*.d.ts",
+        "src/routeTree.gen.ts",
+        "src/main.tsx",
+        "src/router.tsx",
+        "src/vite-env.d.ts",
+      ],
       reporter: ["text", "text-summary", "html", "lcov"],
+      // البوابة الدنيا 20% (سترتفع 40%→60%). ملاحظة: مع توسيع النطاق للمشروع
+      // كاملًا قد لا تُجتاز العتبة حتى تُضاف اختبارات للمكوّنات — انظر STANDARDS.md §4.
       thresholds: {
         lines: 20,
         functions: 20,
