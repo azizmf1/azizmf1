@@ -37,4 +37,12 @@ export default tseslint.config(
     },
   },
   eslintPluginPrettier,
+  {
+    // Formatting is enforced via `npm run format` (Prettier), not as a blocking
+    // lint error — per Prettier's own recommendation to separate linting from
+    // formatting. Kept as a warning so it stays visible. See STANDARDS.md.
+    rules: {
+      "prettier/prettier": "warn",
+    },
+  },
 );

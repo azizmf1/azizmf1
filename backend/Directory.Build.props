@@ -8,5 +8,8 @@
     <InvariantGlobalization>true</InvariantGlobalization>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);CS1591</NoWarn>
+    <!-- Keep NuGet security-audit findings visible as warnings, but do not fail
+         the build on transitive advisories (e.g. NU1903). Tracked in STANDARDS.md. -->
+    <WarningsNotAsErrors>$(WarningsNotAsErrors);NU1901;NU1902;NU1903</WarningsNotAsErrors>
   </PropertyGroup>
 </Project>

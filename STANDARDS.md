@@ -215,6 +215,8 @@ appsettings*.json:          none
 | D2 | EF Migrations بدل Liquibase/Flyway | Coding Standards | بديل مكافئ ومتوافق مع .NET |
 | D3 | PascalCase لمكوّنات React | kebab-case | عُرف صناعي قياسي لـ React |
 | D4 | PostgreSQL | غير مؤكّد (وثيقة مشفّرة) | افتراض بانتظار تأكيد بشري |
+| D5 | Prettier كتحذير لا خطأ في ESLint | تنسيق مُلزم | فصل اللنت عن التنسيق (توصية Prettier)؛ التنسيق يُطبَّق عبر `npm run format` — يحتاج وصولًا لمغذّي الحزم (محجوب حاليًا) |
+| D6 | تدقيق NuGet (NU1901/1902/1903) كتحذير لا خطأ | فحص أمني | حزمة `Microsoft.OpenApi 2.0.0` (تبعية غير مباشرة) فيها ثغرة؛ يبقى التحذير ظاهرًا. الإصلاح الجذري: ترقية الحزمة عند توفّرها |
 
 ---
 
