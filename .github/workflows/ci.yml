@@ -1,0 +1,79 @@
+name: CI
+
+# Runs the full pipeline the way the enterprise standards require:
+#   - Frontend: Node 22, ESLint, Vitest + coverage (≥20% gate)
+#   - Backend:  .NET 10, build, xUnit + Coverlet + Testcontainers (Docker)
+#   - OpenAPI:  structural validation (subset of the 55-rule set)
+#
+# GitHub-hosted runners have internet + Docker, so this is where the REAL
+# build/test results are produced (they could not be run in the authoring env).
+
+on:
+  push:
+    branches: [main, develop, "claude/**"]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: Frontend (Node 22)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install dependencies
+        run: npm install
+      - name: Lint (ESLint)
+        run: npm run lint
+      - name: Test + coverage (Vitest, ≥20% gate)
+        run: npm test
+
+  backend:
+    name: Backend (.NET 10)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      - name: Restore
+        run: dotnet restore backend/Seha.HuntingMedical.sln
+      - name: Build
+        run: dotnet build backend/Seha.HuntingMedical.sln -c Release --no-restore
+      - name: Test + coverage (xUnit + Coverlet + Testcontainers)
+        run: >
+          dotnet test backend/Seha.HuntingMedical.sln
+          -c Release --no-build
+          --collect:"XPlat Code Coverage"
+          --settings backend/coverlet.runsettings
+          --logger "trx;LogFileName=test-results.trx"
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-results
+          path: "**/*.trx"
+          if-no-files-found: ignore
+
+  openapi:
+    name: OpenAPI validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install validator deps
+        run: pip install pyyaml
+      - name: Validate openapi.yaml (structural subset)
+        run: python backend/scripts/validate_openapi.py
