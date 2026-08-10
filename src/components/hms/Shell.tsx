@@ -1,7 +1,7 @@
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import {
-  Bell, ChevronLeft, FileCog, Home, LayoutGrid, LogOut, Megaphone, Menu,
+  Bell, ChevronLeft, ClipboardList, FileCog, FilePlus2, Home, LayoutGrid, LogOut, Megaphone, Menu,
   MessageCircle, Monitor, Settings, ShieldCheck, Sparkles, Users as UsersIcon, X,
 } from "lucide-react";
 import { getSession, clearSession } from "@/lib/session";
@@ -10,11 +10,8 @@ import { toast } from "@/components/hms/Toast";
 import sehaLogoWhite from "@/assets/seha-logo-white.png";
 
 const NAV = [
-  { to: "/dashboard",       label: "الصفحة الرئيسية",  icon: Home },
-  { to: "/system",          label: "ادارة النظام",      icon: Monitor },
-  { to: "/announcements",   label: "التعاميم",          icon: Megaphone },
-  { to: "/services-admin",  label: "إدارة الخدمات",     icon: FileCog },
-  { to: "/services",        label: "الخدمات",           icon: LayoutGrid, expandable: true },
+  { to: "/hunting-medical",     label: "التقارير",   icon: ClipboardList },
+  { to: "/hunting-medical/new", label: "تقرير جديد", icon: FilePlus2 },
 ];
 
 function SehaLogo() {
@@ -65,7 +62,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
           {NAV.map((n) => {
             const active = pathname === n.to || pathname.startsWith(n.to + "/");
             const Icon = n.icon;
-            const exists = n.to === "/dashboard" || n.to === "/services" || n.to === "/hunting-medical";
+            const exists = n.to === "/hunting-medical" || n.to === "/hunting-medical/new";
             const cls = `group relative flex items-center gap-3 rounded-lg px-4 py-3 text-[14px] transition-all ${
               active
                 ? "bg-[var(--brand-70)] text-white font-semibold shadow-sm"

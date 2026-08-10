@@ -105,7 +105,6 @@ function AuditPage() {
         title="تدقيق التقرير الطبي"
         subtitle={`${report.id} · ${report.applicant.name}`}
         breadcrumb={[
-          { label: "الرئيسية", to: "/dashboard" },
           { label: "التقارير الطبية", to: "/hunting-medical" },
           { label: report.id, to: undefined },
           { label: "تدقيق" },

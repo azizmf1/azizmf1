@@ -32,7 +32,7 @@ export function AccessDenied() {
         صلاحية غير كافية
       </h2>
       <p className="mt-1 text-[14px] text-[var(--ink-60)]">{msg("MSG11")}</p>
-      <Link to="/dashboard" className="mt-6">
+      <Link to="/hunting-medical" className="mt-6">
         <Button variant="secondary">العودة للرئيسية</Button>
       </Link>
     </div>

@@ -32,7 +32,6 @@ function NewReportPage() {
         title="إصدار تقرير طبي جديد"
         subtitle="تعبئة بيانات الفحص الطبي لرخصة الصيد"
         breadcrumb={[
-          { label: "الرئيسية", to: "/dashboard" },
           { label: "التقارير الطبية", to: "/hunting-medical" },
           { label: "تقرير جديد" },
         ]}

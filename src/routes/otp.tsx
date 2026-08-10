@@ -76,7 +76,7 @@ function OtpPage() {
       setSession(pending);
       window.localStorage.removeItem(PENDING);
       toast.success(msg("MSG00"));
-      navigate({ to: "/dashboard" });
+      navigate({ to: "/hunting-medical" });
     }, 500);
   };
 

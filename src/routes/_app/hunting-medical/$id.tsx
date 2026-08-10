@@ -86,7 +86,6 @@ function ReportViewPage() {
         title={report.applicant.name}
         subtitle={`${report.id} · ${lookupLabel(LICENSE_TYPES, report.licenseType)}`}
         breadcrumb={[
-          { label: "الرئيسية", to: "/dashboard" },
           { label: "التقارير الطبية", to: "/hunting-medical" },
           { label: report.id },
         ]}

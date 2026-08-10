@@ -12,7 +12,7 @@ import sehaLogo from "@/assets/seha-logo.png";
 export const Route = createFileRoute("/login")({
   beforeLoad: () => {
     if (typeof window !== "undefined" && isAuthed()) {
-      throw redirect({ to: "/dashboard" });
+      throw redirect({ to: "/hunting-medical" });
     }
   },
   component: LoginPage,

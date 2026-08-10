@@ -13,8 +13,6 @@ import { Route as IndexRouteImport } from "./routes/index";
 import { Route as LoginRouteImport } from "./routes/login";
 import { Route as OtpRouteImport } from "./routes/otp";
 import { Route as AppRouteImport } from "./routes/_app";
-import { Route as AppDashboardRouteImport } from "./routes/_app/dashboard";
-import { Route as AppServicesRouteImport } from "./routes/_app/services";
 import { Route as AppHuntingMedicalIndexRouteImport } from "./routes/_app/hunting-medical/index";
 import { Route as AppHuntingMedicalNewRouteImport } from "./routes/_app/hunting-medical/new";
 import { Route as AppHuntingMedicalIdRouteImport } from "./routes/_app/hunting-medical/$id";
@@ -43,18 +41,6 @@ const OtpRoute = OtpRouteImport.update({
 const AppRoute = AppRouteImport.update({
   id: "/_app",
   getParentRoute: () => rootRouteImport,
-});
-
-const AppDashboardRoute = AppDashboardRouteImport.update({
-  id: "/dashboard",
-  path: "/dashboard",
-  getParentRoute: () => AppRoute,
-});
-
-const AppServicesRoute = AppServicesRouteImport.update({
-  id: "/services",
-  path: "/services",
-  getParentRoute: () => AppRoute,
 });
 
 const AppHuntingMedicalIndexRoute = AppHuntingMedicalIndexRouteImport.update({
@@ -98,8 +84,6 @@ const AppHuntingMedicalIdPrintRoute = AppHuntingMedicalIdPrintRouteImport.update
 );
 
 const AppRouteChildren = {
-  AppDashboardRoute,
-  AppServicesRoute,
   AppHuntingMedicalIndexRoute,
   AppHuntingMedicalNewRoute,
   AppHuntingMedicalIdRoute,

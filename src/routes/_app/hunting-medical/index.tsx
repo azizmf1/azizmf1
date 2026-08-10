@@ -74,8 +74,6 @@ function ReportsListPage() {
         title="التقارير الطبية لرخص الصيد"
         subtitle="استعراض وإدارة التقارير الطبية"
         breadcrumb={[
-          { label: "الرئيسية", to: "/dashboard" },
-          { label: "الخدمات", to: "/services" },
           { label: "التقارير الطبية" },
         ]}
         action={
