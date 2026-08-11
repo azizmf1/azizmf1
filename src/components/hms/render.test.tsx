@@ -9,6 +9,7 @@ import { PassFailToggle } from "@/components/hms/PassFail";
 import { ReportSection } from "@/components/hms/ReportSection";
 import { Modal } from "@/components/hms/Modal";
 import { Toaster, toast } from "@/components/hms/Toast";
+import { ApplicantVerification } from "@/components/hms/ApplicantVerification";
 import type { ReportStatus } from "@/data/lookups";
 
 describe("Button", () => {
@@ -145,5 +146,10 @@ describe("ReportSection, Modal, Toast", () => {
     toast.warn("تنبيه");
     toast.info("معلومة");
     expect(container).toBeTruthy();
+  });
+
+  it("renders the applicant verification step", () => {
+    const { container } = render(<ApplicantVerification onVerified={() => {}} />);
+    expect(container.textContent).toContain("التحقق");
   });
 });

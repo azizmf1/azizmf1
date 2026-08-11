@@ -26,11 +26,7 @@ import {
   saveReport,
   type Report,
 } from "@/data/reports";
-import {
-  EXAM_ITEMS,
-  LICENSE_TYPES,
-  lookupLabel,
-} from "@/data/lookups";
+import { EXAM_ITEMS } from "@/data/lookups";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { can } from "@/lib/permissions";
 import { msg } from "@/data/messages";
@@ -124,10 +120,6 @@ function AuditPage() {
               <dl className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
                 <Item label="الاسم" value={report.applicant.name} />
                 <Item label="رقم الهوية" value={report.applicant.nationalId} ltr />
-                <Item
-                  label="نوع الرخصة"
-                  value={lookupLabel(LICENSE_TYPES, report.licenseType)}
-                />
                 <Item label="الجوال" value={report.applicant.phone} ltr />
               </dl>
             </CardBody>

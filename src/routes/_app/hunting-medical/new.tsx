@@ -1,8 +1,10 @@
 import { createFileRoute, Navigate } from "@tanstack/react-router";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { PageHeader } from "@/components/hms/Shell";
 import { ReportForm } from "@/components/hms/ReportForm";
+import { ApplicantVerification } from "@/components/hms/ApplicantVerification";
 import { emptyReport } from "@/data/reports";
+import type { VerifiedPatient } from "@/data/patientVerification";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { can } from "@/lib/permissions";
 
@@ -12,31 +14,46 @@ export const Route = createFileRoute("/_app/hunting-medical/new")({
 
 function NewReportPage() {
   const user = useCurrentUser();
-  const initial = useMemo(
-    () =>
-      user
-        ? emptyReport({ id: user.id, name: user.name, org: user.org })
-        : null,
-    [user],
-  );
+  const [verified, setVerified] = useState<VerifiedPatient | null>(null);
+
+  // يُبنى التقرير فقط بعد التحقق، مع حقن البيانات الموثّقة.
+  const initial = useMemo(() => {
+    if (!user || !verified) return null;
+    const report = emptyReport({ id: user.id, name: user.name, org: user.org });
+    report.applicant = {
+      ...report.applicant,
+      nationalId: verified.nationalId,
+      name: verified.name,
+      nationality: verified.nationality,
+      dob: verified.dob,
+    };
+    return report;
+  }, [user, verified]);
 
   if (!user) return null;
   if (!can(user, "report:create")) {
     return <Navigate to="/hunting-medical" />;
   }
-  if (!initial) return null;
 
   return (
     <div>
       <PageHeader
         title="إصدار تقرير طبي جديد"
-        subtitle="تعبئة بيانات الفحص الطبي لرخصة الصيد"
+        subtitle={
+          verified
+            ? "استكمال بيانات الفحص الطبي"
+            : "الخطوة 1 من 2 — التحقق من هوية المتقدّم"
+        }
         breadcrumb={[
           { label: "التقارير الطبية", to: "/hunting-medical" },
           { label: "تقرير جديد" },
         ]}
       />
-      <ReportForm initial={initial} mode="create" user={user} />
+      {initial ? (
+        <ReportForm initial={initial} mode="create" user={user} lockApplicant />
+      ) : (
+        <ApplicantVerification onVerified={setVerified} />
+      )}
     </div>
   );
 }

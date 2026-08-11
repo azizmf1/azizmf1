@@ -16,13 +16,7 @@ import { Button } from "@/components/hms/Button";
 import { Select, TextInput } from "@/components/hms/Field";
 import { StatusBadge, ResultBadge } from "@/components/hms/Badges";
 import { listReports, type Report } from "@/data/reports";
-import {
-  LICENSE_TYPES,
-  STATUSES,
-  STATUS_ORDER,
-  lookupLabel,
-  type ReportStatus,
-} from "@/data/lookups";
+import { STATUSES, STATUS_ORDER, type ReportStatus } from "@/data/lookups";
 import { fmtDate } from "@/lib/format";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { can } from "@/lib/permissions";
@@ -38,7 +32,6 @@ function ReportsListPage() {
   const [all, setAll] = useState<Report[]>([]);
   const [q, setQ] = useState("");
   const [status, setStatus] = useState("");
-  const [license, setLicense] = useState("");
   const [page, setPage] = useState(1);
 
   useEffect(() => setAll(listReports()), []);
@@ -48,10 +41,9 @@ function ReportsListPage() {
       const text = `${r.applicant.name} ${r.applicant.nationalId} ${r.id}`;
       const okQ = q.trim() === "" || text.includes(q.trim());
       const okS = status === "" || r.status === status;
-      const okL = license === "" || r.licenseType === license;
-      return okQ && okS && okL;
+      return okQ && okS;
     });
-  }, [all, q, status, license]);
+  }, [all, q, status]);
 
   const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const current = Math.min(page, pages);
@@ -63,11 +55,6 @@ function ReportsListPage() {
     { value: "", label: "كل الحالات" },
     ...STATUS_ORDER.map((s) => ({ value: s, label: STATUSES[s].ar })),
   ];
-  const licenseOptions = [
-    { value: "", label: "كل أنواع الرخص" },
-    ...LICENSE_TYPES,
-  ];
-
   return (
     <div>
       <PageHeader
@@ -95,7 +82,7 @@ function ReportsListPage() {
                 تصفية:
               </span>
             </div>
-            <div className="grid flex-[3] grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="grid flex-[3] grid-cols-1 gap-3 sm:grid-cols-2">
               <TextInput
                 value={q}
                 onChange={(e) => {
@@ -113,14 +100,6 @@ function ReportsListPage() {
                 }}
                 options={statusOptions}
               />
-              <Select
-                value={license}
-                onChange={(e) => {
-                  setLicense(e.target.value);
-                  setPage(1);
-                }}
-                options={licenseOptions}
-              />
             </div>
           </div>
         </Card>
@@ -135,9 +114,6 @@ function ReportsListPage() {
                   <th className="px-4 py-3 text-start font-semibold">المتقدّم</th>
                   <th className="hidden px-4 py-3 text-start font-semibold md:table-cell">
                     رقم الهوية
-                  </th>
-                  <th className="hidden px-4 py-3 text-start font-semibold lg:table-cell">
-                    نوع الرخصة
                   </th>
                   <th className="px-4 py-3 text-start font-semibold">الحالة</th>
                   <th className="hidden px-4 py-3 text-start font-semibold sm:table-cell">
@@ -160,9 +136,6 @@ function ReportsListPage() {
                     </td>
                     <td className="num hidden px-4 py-3 text-[var(--ink-70)] md:table-cell">
                       {r.applicant.nationalId}
-                    </td>
-                    <td className="hidden px-4 py-3 text-[var(--ink-70)] lg:table-cell">
-                      {lookupLabel(LICENSE_TYPES, r.licenseType)}
                     </td>
                     <td className="px-4 py-3">
                       <StatusBadge status={r.status} />
@@ -210,7 +183,7 @@ function ReportsListPage() {
                 {rows.length === 0 && (
                   <tr>
                     <td
-                      colSpan={8}
+                      colSpan={7}
                       className="px-4 py-16 text-center text-[14px] text-[var(--ink-60)]"
                     >
                       لا توجد تقارير مطابقة لمعايير البحث.

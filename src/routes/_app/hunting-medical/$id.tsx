@@ -32,7 +32,6 @@ import {
   CITIES,
   EXAM_ITEMS,
   GENDERS,
-  LICENSE_TYPES,
   NATIONALITIES,
   lookupLabel,
 } from "@/data/lookups";
@@ -84,7 +83,7 @@ function ReportViewPage() {
     <div>
       <PageHeader
         title={report.applicant.name}
-        subtitle={`${report.id} · ${lookupLabel(LICENSE_TYPES, report.licenseType)}`}
+        subtitle={report.id}
         breadcrumb={[
           { label: "التقارير الطبية", to: "/hunting-medical" },
           { label: report.id },
@@ -163,10 +162,6 @@ function ReportViewPage() {
                 value={report.applicant.bloodType || "—"}
                 ltr
                 icon={<Droplet className="size-4 text-[var(--err-600)]" />}
-              />
-              <Info
-                label="نوع الرخصة"
-                value={lookupLabel(LICENSE_TYPES, report.licenseType)}
               />
             </dl>
           </ReportSection>

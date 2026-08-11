@@ -18,13 +18,8 @@ import { ReportSection } from "@/components/hms/ReportSection";
 import { ResultBadge } from "@/components/hms/Badges";
 import { Modal } from "@/components/hms/Modal";
 import { toast } from "@/components/hms/Toast";
-import {
-  CITIES,
-  EXAM_ITEMS,
-  GENDERS,
-  LICENSE_TYPES,
-  NATIONALITIES,
-} from "@/data/lookups";
+import { CITIES, EXAM_ITEMS, GENDERS, NATIONALITIES } from "@/data/lookups";
+import { BadgeCheck } from "lucide-react";
 import {
   appendTimeline,
   saveReport,
@@ -33,6 +28,7 @@ import {
 } from "@/data/reports";
 import type { User } from "@/data/users";
 import { msg } from "@/data/messages";
+import { VERIFICATION_SOURCE } from "@/data/patientVerification";
 
 type Mode = "create" | "edit";
 
@@ -40,10 +36,13 @@ export function ReportForm({
   initial,
   mode,
   user,
+  lockApplicant = false,
 }: {
   initial: Report;
   mode: Mode;
   user: User;
+  /** أقفل الحقول الموثّقة من النظام الخارجي (الاسم/الهوية/الميلاد/الجنسية). */
+  lockApplicant?: boolean;
 }) {
   const navigate = useNavigate();
   const [report, setReport] = useState<Report>(() => normalizeExams(initial));
@@ -157,6 +156,12 @@ export function ReportForm({
             subtitle="المعلومات الشخصية وبيانات التواصل"
             icon={<UserRound className="size-4" />}
           >
+            {lockApplicant && (
+              <div className="mb-4 flex items-center gap-2 rounded-[var(--r-md)] border border-[var(--ok-100)] bg-[var(--ok-50)] px-3 py-2 text-[12px] font-medium text-[var(--ok-700)]">
+                <BadgeCheck className="size-4" />
+                بيانات موثّقة من {VERIFICATION_SOURCE} — غير قابلة للتعديل
+              </div>
+            )}
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="الاسم الكامل" required error={errors.name}>
                 <TextInput
@@ -164,6 +169,7 @@ export function ReportForm({
                   onChange={(e) => setApplicant("name", e.target.value)}
                   placeholder="الاسم الرباعي"
                   invalid={!!errors.name}
+                  disabled={lockApplicant}
                 />
               </Field>
               <Field label="رقم الهوية" required error={errors.nationalId}>
@@ -178,6 +184,7 @@ export function ReportForm({
                   }
                   placeholder="10 أرقام"
                   invalid={!!errors.nationalId}
+                  disabled={lockApplicant}
                 />
               </Field>
               <Field label="تاريخ الميلاد" required error={errors.dob}>
@@ -187,6 +194,7 @@ export function ReportForm({
                   value={report.applicant.dob}
                   onChange={(e) => setApplicant("dob", e.target.value)}
                   invalid={!!errors.dob}
+                  disabled={lockApplicant}
                 />
               </Field>
               <Field label="الجنس" required error={errors.gender}>
@@ -208,6 +216,7 @@ export function ReportForm({
                   value={report.applicant.nationality}
                   onChange={(e) => setApplicant("nationality", e.target.value)}
                   options={NATIONALITIES}
+                  disabled={lockApplicant}
                 />
               </Field>
               <Field label="المدينة">
@@ -229,15 +238,6 @@ export function ReportForm({
                   }
                   placeholder="05XXXXXXXX"
                   invalid={!!errors.phone}
-                />
-              </Field>
-              <Field label="نوع الرخصة" required>
-                <Select
-                  value={report.licenseType}
-                  onChange={(e) =>
-                    setReport((r) => ({ ...r, licenseType: e.target.value }))
-                  }
-                  options={LICENSE_TYPES}
                 />
               </Field>
             </div>

@@ -12,7 +12,6 @@ import {
   CITIES,
   EXAM_ITEMS,
   GENDERS,
-  LICENSE_TYPES,
   NATIONALITIES,
   lookupLabel,
 } from "@/data/lookups";
@@ -114,10 +113,6 @@ function PrintPage() {
               label="فصيلة الدم"
               value={report.applicant.bloodType || "—"}
               ltr
-            />
-            <PItem
-              label="نوع الرخصة"
-              value={lookupLabel(LICENSE_TYPES, report.licenseType)}
             />
           </div>
         </PrintSection>

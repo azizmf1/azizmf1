@@ -37,7 +37,7 @@ function EditReportPage() {
           { label: "تعديل" },
         ]}
       />
-      <ReportForm initial={report} mode="edit" user={user} />
+      <ReportForm initial={report} mode="edit" user={user} lockApplicant />
     </div>
   );
 }
