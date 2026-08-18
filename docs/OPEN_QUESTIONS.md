@@ -1,5 +1,8 @@
 # OPEN_QUESTIONS — BRS v1.0 alignment (re-baselined against BA Decisions)
 
+> **⚠️ Owner override (supersedes BA OQ-17 for this delivery):** the product owner directed to **keep the existing client-side app** (localStorage) and modify it in place to meet the BRS — **no new .NET backend** in this delivery. Consequently the BRS rules (uniqueness, expiry, scoping, code generation) are implemented **client-side**; true server-side enforcement is deferred. Recorded as a documented deviation.
+
+
 > Re-baselined per `docs/BA_DECISIONS_PHASE2.md` (Approved to proceed to Phase 2)
 > and `docs/RFI-001.md` (raised with client). Status key:
 > ✅ **Resolved** (implement as written) · 🟡 **Provisional** (implement now behind a

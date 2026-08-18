@@ -29,12 +29,12 @@ describe("بذرة البيانات", () => {
   });
 
   it("getReport يجد تقريرًا موجودًا في البذرة", () => {
-    expect(getReport("HM-2026-1001")?.applicant.name).toBeTruthy();
+    expect(getReport("HLR26000000001")?.applicant.name).toBeTruthy();
     expect(getReport("لا-يوجد")).toBeUndefined();
   });
 
   it("resetSeed يعيد البذرة الكاملة", () => {
-    deleteReport("HM-2026-1001");
+    deleteReport("HLR26000000001");
     expect(listReports()).toHaveLength(11);
     resetSeed();
     expect(listReports()).toHaveLength(12);
@@ -50,8 +50,8 @@ describe("emptyReport / nextId", () => {
     expect(r.doctor.id).toBe(doctor.id);
   });
 
-  it("nextId يولّد معرّفًا بالصيغة HM-2026-XXXX", () => {
-    expect(nextId()).toMatch(/^HM-2026-\d{4}$/);
+  it("nextId يولّد معرّفًا بالصيغة HLR[YY][9]", () => {
+    expect(nextId()).toMatch(/^HLR\d{2}\d{9}$/);
   });
 });
 
@@ -64,10 +64,10 @@ describe("CRUD", () => {
 
   it("saveReport يحدّث تقريرًا موجودًا دون تكرار", () => {
     const before = listReports().length;
-    const updated = { ...getReport("HM-2026-1004")!, status: "submitted" as const };
+    const updated = { ...getReport("HLR26000000004")!, status: "pending_audit" as const };
     saveReport(updated);
     expect(listReports()).toHaveLength(before);
-    expect(getReport("HM-2026-1004")?.status).toBe("submitted");
+    expect(getReport("HLR26000000004")?.status).toBe("pending_audit");
   });
 
   it("deleteReport يحذف التقرير", () => {

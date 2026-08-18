@@ -39,7 +39,7 @@ export interface TimelineEntry {
 }
 
 export interface Report {
-  id: string; // HM-2026-XXXX
+  id: string; // HLR[YY][9-digit] e.g. HLR26000000001
   status: ReportStatus;
   applicant: Applicant;
   licenseType: string; // lookup
@@ -94,17 +94,15 @@ export function emptyReport(doctor: Report["doctor"]): Report {
   };
 }
 
-let _seq = 0;
+// BR-CODE-FORMAT: HLR[YY][9-digit zero-padded sequential], never reset. e.g. HLR26000000043
 export function nextId(): string {
-  // معرّف زمني فريد بصيغة HM-2026-XXXX
-  _seq += 1;
+  const yy = String(new Date().getFullYear() % 100).padStart(2, "0");
   const all = listReports();
   const max = all.reduce((m, r) => {
-    const n = parseInt(r.id.split("-")[2] ?? "0", 10);
+    const n = parseInt(r.id.replace(/^HLR\d{2}/, ""), 10);
     return Number.isFinite(n) ? Math.max(m, n) : m;
   }, 0);
-  const next = Math.max(max + 1, 1000 + _seq);
-  return `HM-2026-${String(next).padStart(4, "0")}`;
+  return `HLR${yy}${String(max + 1).padStart(9, "0")}`;
 }
 
 function read(): Report[] {
@@ -187,8 +185,8 @@ function exams(allPassed: boolean, failedKeys: string[] = []): ExamResult[] {
 
 export const SEED: Report[] = [
   {
-    id: "HM-2026-1001",
-    status: "approved",
+    id: "HLR26000000001",
+    status: "completed",
     applicant: {
       name: "عبدالله محمد الشهري",
       nationalId: "1098234571",
@@ -217,8 +215,8 @@ export const SEED: Report[] = [
     ],
   },
   {
-    id: "HM-2026-1002",
-    status: "submitted",
+    id: "HLR26000000002",
+    status: "pending_audit",
     applicant: {
       name: "فهد سعد القحطاني",
       nationalId: "1076551203",
@@ -244,8 +242,8 @@ export const SEED: Report[] = [
     ],
   },
   {
-    id: "HM-2026-1003",
-    status: "returned",
+    id: "HLR26000000003",
+    status: "requires_modification",
     applicant: {
       name: "ريم خالد الدوسري",
       nationalId: "1099887766",
@@ -275,7 +273,7 @@ export const SEED: Report[] = [
     ],
   },
   {
-    id: "HM-2026-1004",
+    id: "HLR26000000004",
     status: "draft",
     applicant: {
       name: "سلطان ناصر العنزي",
@@ -300,8 +298,8 @@ export const SEED: Report[] = [
     ],
   },
   {
-    id: "HM-2026-1005",
-    status: "approved",
+    id: "HLR26000000005",
+    status: "completed",
     applicant: {
       name: "ماجد علي الغامدي",
       nationalId: "1011223344",
@@ -330,8 +328,8 @@ export const SEED: Report[] = [
     ],
   },
   {
-    id: "HM-2026-1006",
-    status: "submitted",
+    id: "HLR26000000006",
+    status: "pending_audit",
     applicant: {
       name: "هند فيصل المالكي",
       nationalId: "1066778899",
@@ -357,8 +355,8 @@ export const SEED: Report[] = [
     ],
   },
   {
-    id: "HM-2026-1007",
-    status: "under_review",
+    id: "HLR26000000007",
+    status: "pending_audit",
     applicant: {
       name: "تركي بندر الحربي",
       nationalId: "1033445566",
@@ -386,8 +384,8 @@ export const SEED: Report[] = [
     ],
   },
   {
-    id: "HM-2026-1008",
-    status: "approved",
+    id: "HLR26000000008",
+    status: "expired",
     applicant: {
       name: "نواف عبدالعزيز السبيعي",
       nationalId: "1088990011",
@@ -416,7 +414,7 @@ export const SEED: Report[] = [
     ],
   },
   {
-    id: "HM-2026-1009",
+    id: "HLR26000000009",
     status: "draft",
     applicant: {
       name: "بدر صالح المطيري",
@@ -441,8 +439,8 @@ export const SEED: Report[] = [
     ],
   },
   {
-    id: "HM-2026-1010",
-    status: "returned",
+    id: "HLR26000000010",
+    status: "requires_modification",
     applicant: {
       name: "العنود ماجد الشمري",
       nationalId: "1077665544",
@@ -472,8 +470,8 @@ export const SEED: Report[] = [
     ],
   },
   {
-    id: "HM-2026-1011",
-    status: "approved",
+    id: "HLR26000000011",
+    status: "completed",
     applicant: {
       name: "يوسف إبراهيم الدخيل",
       nationalId: "1022334455",
@@ -502,8 +500,8 @@ export const SEED: Report[] = [
     ],
   },
   {
-    id: "HM-2026-1012",
-    status: "submitted",
+    id: "HLR26000000012",
+    status: "pending_audit",
     applicant: {
       name: "منيرة سعود الرشيد",
       nationalId: "1099001122",

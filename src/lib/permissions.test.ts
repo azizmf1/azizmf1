@@ -15,7 +15,7 @@ const mkUser = (role: User["role"]): User => ({
 });
 
 const mkReport = (status: ReportStatus): Report => ({
-  id: "HM-2026-9001",
+  id: "HLR26000009001",
   status,
   applicant: {
     name: "",
@@ -53,26 +53,27 @@ describe("can()", () => {
     expect(can(d, "report:audit")).toBe(false);
   });
 
-  it("الطبيب: التعديل على المسودة والمُعاد فقط", () => {
+  it("الطبيب: التعديل على المسودة والمُعاد إلى المدخل فقط", () => {
     const d = mkUser("doctor");
     expect(can(d, "report:edit", mkReport("draft"))).toBe(true);
-    expect(can(d, "report:edit", mkReport("returned"))).toBe(true);
-    expect(can(d, "report:edit", mkReport("submitted"))).toBe(false);
-    expect(can(d, "report:edit", mkReport("approved"))).toBe(false);
+    expect(can(d, "report:edit", mkReport("requires_modification"))).toBe(true);
+    expect(can(d, "report:edit", mkReport("pending_audit"))).toBe(false);
+    expect(can(d, "report:edit", mkReport("completed"))).toBe(false);
+    expect(can(d, "report:edit", mkReport("expired"))).toBe(false);
   });
 
   it("الطبيب: الحذف على المسودة فقط", () => {
     const d = mkUser("doctor");
     expect(can(d, "report:delete", mkReport("draft"))).toBe(true);
-    expect(can(d, "report:delete", mkReport("submitted"))).toBe(false);
+    expect(can(d, "report:delete", mkReport("pending_audit"))).toBe(false);
   });
 
-  it("المدقّق: التدقيق على المُرسل وقيد التدقيق فقط", () => {
+  it("المدقّق: التدقيق على بانتظار التدقيق فقط", () => {
     const a = mkUser("auditor");
-    expect(can(a, "report:audit", mkReport("submitted"))).toBe(true);
-    expect(can(a, "report:audit", mkReport("under_review"))).toBe(true);
+    expect(can(a, "report:audit", mkReport("pending_audit"))).toBe(true);
     expect(can(a, "report:audit", mkReport("draft"))).toBe(false);
-    expect(can(a, "report:audit", mkReport("approved"))).toBe(false);
+    expect(can(a, "report:audit", mkReport("completed"))).toBe(false);
+    expect(can(a, "report:audit", mkReport("requires_modification"))).toBe(false);
     expect(can(a, "report:create")).toBe(false);
     expect(can(a, "report:edit", mkReport("draft"))).toBe(false);
   });
@@ -83,6 +84,6 @@ describe("can()", () => {
     expect(can(m, "report:view")).toBe(true);
     expect(can(m, "report:create")).toBe(false);
     expect(can(m, "report:edit", mkReport("draft"))).toBe(false);
-    expect(can(m, "report:audit", mkReport("submitted"))).toBe(false);
+    expect(can(m, "report:audit", mkReport("pending_audit"))).toBe(false);
   });
 });

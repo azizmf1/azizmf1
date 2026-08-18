@@ -60,7 +60,7 @@ function ReportViewPage() {
   const submit = () => {
     const now = new Date().toISOString();
     const next = appendTimeline(
-      { ...report, status: "submitted", submittedAt: now, updatedAt: now },
+      { ...report, status: "pending_audit", submittedAt: now, updatedAt: now },
       {
         at: now,
         actorId: user.id,
@@ -125,7 +125,7 @@ function ReportViewPage() {
       <div className="grid gap-6 p-4 lg:grid-cols-[1fr_320px] lg:p-10">
         {/* المحتوى */}
         <div className="space-y-6">
-          {report.status === "returned" && report.auditNote && (
+          {report.status === "requires_modification" && report.auditNote && (
             <div className="rounded-[var(--r-lg)] border border-[var(--err-100)] bg-[var(--err-50)] p-4">
               <div className="text-[13px] font-bold text-[var(--err-700)]">
                 مُعاد للتعديل — ملاحظة المدقّق

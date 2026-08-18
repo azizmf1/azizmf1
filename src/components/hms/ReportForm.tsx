@@ -99,7 +99,7 @@ export function ReportForm({
       doctor: { id: user.id, name: user.name, org: user.org },
       updatedAt: now,
     };
-    if (status === "submitted") next.submittedAt = now;
+    if (status === "pending_audit") next.submittedAt = now;
     next = appendTimeline(next, {
       at: now,
       actorId: user.id,
@@ -121,7 +121,7 @@ export function ReportForm({
 
   const doSubmit = () => {
     setConfirm(false);
-    persist("submitted", "إرسال للتدقيق");
+    persist("pending_audit", "إرسال للتدقيق");
     toast.success(msg("MSG05"));
     navigate({ to: "/hunting-medical/$id", params: { id: report.id } });
   };
@@ -139,7 +139,7 @@ export function ReportForm({
       <div className="grid gap-6 p-4 pb-28 lg:grid-cols-[1fr_300px] lg:p-10 lg:pb-28">
         {/* العمود الرئيسي */}
         <div className="space-y-6">
-          {report.status === "returned" && report.auditNote && (
+          {report.status === "requires_modification" && report.auditNote && (
             <div className="rounded-[var(--r-lg)] border border-[var(--err-100)] bg-[var(--err-50)] p-4">
               <div className="text-[13px] font-bold text-[var(--err-700)]">
                 ملاحظة المدقّق — مُعاد للتعديل

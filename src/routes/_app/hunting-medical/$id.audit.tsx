@@ -70,7 +70,7 @@ function AuditPage() {
     const next =
       decision === "approve"
         ? appendTimeline(
-            { ...base, status: "approved" },
+            { ...base, status: "completed" },
             {
               at: now,
               actorId: user.id,
@@ -80,7 +80,7 @@ function AuditPage() {
             },
           )
         : appendTimeline(
-            { ...base, status: "returned", auditNote: note.trim() },
+            { ...base, status: "requires_modification", auditNote: note.trim() },
             {
               at: now,
               actorId: user.id,

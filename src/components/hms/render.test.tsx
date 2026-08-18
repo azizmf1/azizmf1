@@ -71,10 +71,10 @@ describe("Badges", () => {
   it("renders all statuses and results", () => {
     const statuses: ReportStatus[] = [
       "draft",
-      "submitted",
-      "under_review",
-      "approved",
-      "returned",
+      "pending_audit",
+      "completed",
+      "requires_modification",
+      "expired",
     ];
     for (const s of statuses) {
       const { container } = render(<StatusBadge status={s} />);
