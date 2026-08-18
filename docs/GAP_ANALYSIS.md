@@ -205,3 +205,36 @@ from BRS §12 plus newly-found items **OQ-17…OQ-20**. Items above tagged **OQ-
 - Missing: ~40 · Conflicting: ~14 · Partial: ~30 · Compliant: ~6.
 - Highest-risk clusters: expiry engine + validity periods, uniqueness rule, MC/data scoping,
   server-side enforcement, i18n, MEWA integration (blocked).
+
+---
+
+## Re-baseline vs BA Decisions (Phase 2 unblock)
+
+Applied from `docs/BA_DECISIONS_PHASE2.md` + `docs/RFI-001.md`. This supersedes the
+"Open questions" note above.
+
+- **Architecture (OQ-17) — DECIDED:** every "server-side / scoping / concurrency /
+  expiry / PDF" row is now *actionable on the .NET backend* (no longer indeterminate).
+  End state = backend enforces; FE calls the API and resolves message IDs / lookup codes.
+- **Scope (OQ-19) — DECIDED (1 provisional):** non-destructive. The "remove non-BRS
+  fields" rows become **remove from form/payload/detail/PDF, keep in schema** (legacy
+  read-only block on UC05). No table/column/data drops → lowers those rows' risk.
+- **Resolved (implement as written):** OQ-05/06/07/08/09/10/13/14/15/16 — the matching
+  rows above move from *blocked/ambiguous* to **actionable**.
+- **Provisional (implement behind a seam):** OQ-02/03/04/11/12/18/20 — implement now,
+  tagged `// PROVISIONAL: RFI-001 / OQ-xx`, isolated in one strategy/adapter/config.
+- **Blocked (seam only):** OQ-01 (MEWA contract) — port + stub + outbox; approval never
+  blocks on it. **OQ-21** (i18n default/switch) — no BA decision; do not implement dependents.
+
+### Re-baselined status
+
+| Bucket | Before | After decisions |
+|---|---|---|
+| Hard-blocked (cannot start) | many | **1** (MEWA *contract* only — seam is built) + OQ-21 |
+| Actionable now (Resolved) | — | statuses, code, uniqueness, scoping, expiry, logs, messages, UC01–07 |
+| Actionable behind seam (Provisional) | — | registry, ID formats, nationality, vision, facility/city |
+
+**Phase 2 order (per BA):** UC01 → UC02 → UC03 → UC06 → UC04 → UC05 → UC07, one commit
+per use case, each message referencing the BRS items satisfied. A preparatory
+`foundation` commit (BRS statuses/lookups/permission-keys/message catalogue/HLR code +
+i18n + registry/MEWA/expiry seams) precedes UC01.
