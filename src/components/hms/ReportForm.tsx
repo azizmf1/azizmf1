@@ -2,9 +2,11 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import {
   Activity,
+  BadgeCheck,
   CheckCircle2,
   ClipboardCheck,
-  Heart,
+  Droplet,
+  Eye,
   Save,
   Send,
   Stethoscope,
@@ -12,22 +14,33 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/hms/Button";
 import { Field, Select, TextInput, TextArea } from "@/components/hms/Field";
-import { BloodChips } from "@/components/hms/BloodChips";
 import { PassFailToggle } from "@/components/hms/PassFail";
 import { ReportSection } from "@/components/hms/ReportSection";
 import { ResultBadge } from "@/components/hms/Badges";
 import { Modal } from "@/components/hms/Modal";
 import { toast } from "@/components/hms/Toast";
-import { CITIES, EXAM_ITEMS, GENDERS, NATIONALITIES } from "@/data/lookups";
-import { BadgeCheck } from "lucide-react";
+import {
+  BLOOD_TYPE_OPTIONS,
+  CITIES,
+  GENDERS,
+  ID_TYPES,
+  NATIONALITIES,
+  STATUSES,
+  VISION_LEVELS,
+} from "@/data/lookups";
 import {
   appendTimeline,
+  emptyEligibility,
+  emptyVisualAcuity,
+  expirePriorNotFit,
+  findUniquenessBlock,
   saveReport,
-  type ExamResult,
+  type Eligibility,
   type Report,
+  type VisualAcuity,
 } from "@/data/reports";
 import type { User } from "@/data/users";
-import { msg } from "@/data/messages";
+import { brsMsg } from "@/data/brsMessages";
 import { VERIFICATION_SOURCE } from "@/data/patientVerification";
 
 type Mode = "create" | "edit";
@@ -41,28 +54,32 @@ export function ReportForm({
   initial: Report;
   mode: Mode;
   user: User;
-  /** أقفل الحقول الموثّقة من النظام الخارجي (الاسم/الهوية/الميلاد/الجنسية). */
+  /** أقفل الحقول الموثّقة من السجل الوطني (النوع/الرقم/الاسم/الجنسية/الجنس/الميلاد). */
   lockApplicant?: boolean;
 }) {
   const navigate = useNavigate();
-  const [report, setReport] = useState<Report>(() => normalizeExams(initial));
+  const [report, setReport] = useState<Report>(() => normalize(initial));
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [confirm, setConfirm] = useState(false);
+
+  const va = report.visualAcuity ?? emptyVisualAcuity();
+  const elig = report.eligibility ?? emptyEligibility();
 
   const setApplicant = <K extends keyof Report["applicant"]>(
     k: K,
     v: Report["applicant"][K],
   ) => setReport((r) => ({ ...r, applicant: { ...r.applicant, [k]: v } }));
 
-  const setVitals = <K extends keyof Report["vitals"]>(
-    k: K,
-    v: Report["vitals"][K],
-  ) => setReport((r) => ({ ...r, vitals: { ...r.vitals, [k]: v } }));
-
-  const setExam = (key: string, value: ExamResult["value"]) =>
+  const setVA = <K extends keyof VisualAcuity>(k: K, v: VisualAcuity[K]) =>
     setReport((r) => ({
       ...r,
-      exams: r.exams.map((e) => (e.key === key ? { ...e, value } : e)),
+      visualAcuity: { ...(r.visualAcuity ?? emptyVisualAcuity()), [k]: v },
+    }));
+
+  const setElig = <K extends keyof Eligibility>(k: K, v: Eligibility[K]) =>
+    setReport((r) => ({
+      ...r,
+      eligibility: { ...(r.eligibility ?? emptyEligibility()), [k]: v },
     }));
 
   // ---- اكتمال الأقسام (شريط التقدّم) ----
@@ -70,22 +87,19 @@ export function ReportForm({
   const completed = sections.filter((s) => s.done).length;
   const progress = Math.round((completed / sections.length) * 100);
 
-  // ---- التحقق ----
+  // ---- التحقق من الحقول الإلزامية (MSG05) ----
   function validate(forSubmit: boolean): boolean {
     const e: Record<string, string> = {};
-    const a = report.applicant;
-    if (!a.name.trim()) e.name = msg("MSG06");
-    if (!/^\d{10}$/.test(a.nationalId)) e.nationalId = msg("MSG07");
-    if (!a.dob) e.dob = msg("MSG06");
-    if (!a.gender) e.gender = msg("MSG06");
-    if (!/^05\d{8}$/.test(a.phone)) e.phone = "رقم جوال غير صحيح (05XXXXXXXX).";
+    const v = report.visualAcuity ?? emptyVisualAcuity();
+    if (!v.levelRight) e.levelRight = "مطلوب";
+    if (!v.levelLeft) e.levelLeft = "مطلوب";
+    if (!v.correctedRight) e.correctedRight = "مطلوب";
+    if (!v.correctedLeft) e.correctedLeft = "مطلوب";
+    if (!report.applicant.bloodType) e.bloodType = "مطلوب";
     if (forSubmit) {
-      if (!a.bloodType) e.bloodType = "يرجى تحديد فصيلة الدم.";
-      if (!report.vitals.height) e.height = msg("MSG06");
-      if (!report.vitals.weight) e.weight = msg("MSG06");
-      if (!report.result) e.result = "يرجى تحديد النتيجة النهائية.";
-      if (!report.recommendation.trim())
-        e.recommendation = "يرجى كتابة التوصية الطبية.";
+      if (!report.result) e.result = "مطلوب";
+      if (report.result === "unfit" && !report.notFitJustification?.trim())
+        e.notFitJustification = "مطلوب عند نتيجة غير لائق";
     }
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -99,7 +113,11 @@ export function ReportForm({
       doctor: { id: user.id, name: user.name, org: user.org },
       updatedAt: now,
     };
-    if (status === "pending_audit") next.submittedAt = now;
+    if (status === "pending_audit") {
+      next.submittedAt = now;
+      // BR08: أي تقرير سابق "غير لائق" معتمد لنفس المراجع يُنقل إلى منتهٍ.
+      expirePriorNotFit(report.applicant.nationalId, report.id);
+    }
     next = appendTimeline(next, {
       at: now,
       actorId: user.id,
@@ -110,29 +128,43 @@ export function ReportForm({
   }
 
   const saveDraft = () => {
-    if (!validate(false)) {
-      toast.warn(msg("MSG06"));
+    if (!report.applicant.bloodType) {
+      toast.warn(brsMsg("MSG05"));
       return;
     }
     persist("draft", mode === "create" ? "إنشاء مسودة" : "تحديث المسودة");
-    toast.success(msg("MSG04"));
+    toast.success(brsMsg("MSG00"));
     navigate({ to: "/hunting-medical/$id", params: { id: report.id } });
   };
 
   const doSubmit = () => {
     setConfirm(false);
     persist("pending_audit", "إرسال للتدقيق");
-    toast.success(msg("MSG05"));
+    toast.success(brsMsg("MSG00"));
     navigate({ to: "/hunting-medical/$id", params: { id: report.id } });
   };
 
   const trySubmit = () => {
     if (!validate(true)) {
-      toast.error(msg("MSG06"));
+      toast.error(brsMsg("MSG05"));
+      return;
+    }
+    // BR-UNIQUE-REPORT: تحقّق من عدم وجود تقرير ساري/تحت الإجراء لنفس المراجع.
+    const block = findUniquenessBlock(report.applicant.nationalId, report.id);
+    if (block?.kind === "valid") {
+      toast.error(brsMsg("MSG06"));
+      return;
+    }
+    if (block?.kind === "in_progress") {
+      toast.error(
+        brsMsg("MSG07", { status: STATUSES[block.report.status].ar }),
+      );
       return;
     }
     setConfirm(true);
   };
+
+  const isFit = report.result === "fit";
 
   return (
     <div className="relative">
@@ -150,10 +182,10 @@ export function ReportForm({
             </div>
           )}
 
-          {/* بيانات المتقدّم */}
+          {/* بيانات المراجع — موثّقة من السجل الوطني */}
           <ReportSection
-            title="بيانات المتقدّم"
-            subtitle="المعلومات الشخصية وبيانات التواصل"
+            title="بيانات المراجع"
+            subtitle="بيانات موثّقة من السجل الوطني"
             icon={<UserRound className="size-4" />}
           >
             {lockApplicant && (
@@ -163,41 +195,55 @@ export function ReportForm({
               </div>
             )}
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="الاسم الكامل" required error={errors.name}>
-                <TextInput
-                  value={report.applicant.name}
-                  onChange={(e) => setApplicant("name", e.target.value)}
-                  placeholder="الاسم الرباعي"
-                  invalid={!!errors.name}
+              <Field label="نوع الهوية">
+                <Select
+                  value={report.applicant.idType ?? ""}
+                  onChange={(e) =>
+                    setApplicant(
+                      "idType",
+                      e.target.value as Report["applicant"]["idType"],
+                    )
+                  }
+                  options={ID_TYPES}
+                  placeholder="—"
                   disabled={lockApplicant}
                 />
               </Field>
-              <Field label="رقم الهوية" required error={errors.nationalId}>
+              <Field label="رقم الهوية">
                 <TextInput
                   ltr
                   value={report.applicant.nationalId}
                   onChange={(e) =>
-                    setApplicant(
-                      "nationalId",
-                      e.target.value.replace(/\D/g, "").slice(0, 10),
-                    )
+                    setApplicant("nationalId", e.target.value.slice(0, 20))
                   }
-                  placeholder="10 أرقام"
-                  invalid={!!errors.nationalId}
                   disabled={lockApplicant}
                 />
               </Field>
-              <Field label="تاريخ الميلاد" required error={errors.dob}>
+              <Field label="الاسم الكامل (عربي)">
+                <TextInput
+                  value={report.applicant.name}
+                  onChange={(e) => setApplicant("name", e.target.value)}
+                  disabled={lockApplicant}
+                />
+              </Field>
+              <Field label="الاسم الكامل (إنجليزي)">
+                <TextInput
+                  ltr
+                  value={report.applicant.fullNameEn ?? ""}
+                  onChange={(e) => setApplicant("fullNameEn", e.target.value)}
+                  disabled={lockApplicant}
+                />
+              </Field>
+              <Field label="تاريخ الميلاد">
                 <TextInput
                   ltr
                   type="date"
                   value={report.applicant.dob}
                   onChange={(e) => setApplicant("dob", e.target.value)}
-                  invalid={!!errors.dob}
                   disabled={lockApplicant}
                 />
               </Field>
-              <Field label="الجنس" required error={errors.gender}>
+              <Field label="الجنس">
                 <Select
                   value={report.applicant.gender}
                   onChange={(e) =>
@@ -207,8 +253,8 @@ export function ReportForm({
                     )
                   }
                   options={GENDERS}
-                  placeholder="اختر الجنس"
-                  invalid={!!errors.gender}
+                  placeholder="—"
+                  disabled={lockApplicant}
                 />
               </Field>
               <Field label="الجنسية">
@@ -226,123 +272,146 @@ export function ReportForm({
                   options={CITIES}
                 />
               </Field>
-              <Field label="رقم الجوال" required error={errors.phone}>
-                <TextInput
-                  ltr
-                  value={report.applicant.phone}
-                  onChange={(e) =>
-                    setApplicant(
-                      "phone",
-                      e.target.value.replace(/\D/g, "").slice(0, 10),
-                    )
-                  }
-                  placeholder="05XXXXXXXX"
-                  invalid={!!errors.phone}
-                />
-              </Field>
-            </div>
-
-            <div className="mt-4">
-              <Field label="فصيلة الدم" error={errors.bloodType}>
-                <BloodChips
-                  value={report.applicant.bloodType}
-                  onChange={(v) => setApplicant("bloodType", v)}
-                />
-              </Field>
             </div>
           </ReportSection>
 
-          {/* العلامات الحيوية */}
+          {/* فحص حدّة الإبصار — BRS §6 */}
           <ReportSection
-            title="العلامات الحيوية"
-            subtitle="القياسات الأساسية وقت الفحص"
-            icon={<Heart className="size-4" />}
+            title="فحص حدّة الإبصار"
+            subtitle="النظر لكل عين، مستوى الإبصار بدون/مع التصحيح، وعمى الألوان"
+            icon={<Eye className="size-4" />}
           >
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <Field label="الطول (سم)" required error={errors.height}>
-                <TextInput
-                  ltr
-                  value={report.vitals.height}
-                  onChange={(e) =>
-                    setVitals("height", e.target.value.replace(/\D/g, ""))
-                  }
-                  placeholder="175"
-                  invalid={!!errors.height}
+            <div className="grid gap-5 sm:grid-cols-2">
+              <Field label="نظر العين اليمنى">
+                <PassFailToggle
+                  value={va.visionRight}
+                  onChange={(v) => setVA("visionRight", v)}
+                  passedLabel="سليم"
+                  failedLabel="غير سليم"
                 />
               </Field>
-              <Field label="الوزن (كجم)" required error={errors.weight}>
-                <TextInput
-                  ltr
-                  value={report.vitals.weight}
-                  onChange={(e) =>
-                    setVitals("weight", e.target.value.replace(/\D/g, ""))
-                  }
-                  placeholder="78"
-                  invalid={!!errors.weight}
+              <Field label="نظر العين اليسرى">
+                <PassFailToggle
+                  value={va.visionLeft}
+                  onChange={(v) => setVA("visionLeft", v)}
+                  passedLabel="سليم"
+                  failedLabel="غير سليم"
                 />
               </Field>
-              <Field label="ضغط الدم">
-                <TextInput
-                  ltr
-                  value={report.vitals.bloodPressure}
-                  onChange={(e) => setVitals("bloodPressure", e.target.value)}
-                  placeholder="120/80"
+              <Field
+                label="مستوى إبصار العين اليمنى"
+                required
+                error={errors.levelRight}
+              >
+                <Select
+                  value={va.levelRight}
+                  onChange={(e) => setVA("levelRight", e.target.value)}
+                  options={VISION_LEVELS}
+                  placeholder="اختر المستوى"
+                  invalid={!!errors.levelRight}
                 />
               </Field>
-              <Field label="النبض">
-                <TextInput
-                  ltr
-                  value={report.vitals.pulse}
-                  onChange={(e) =>
-                    setVitals("pulse", e.target.value.replace(/\D/g, ""))
-                  }
-                  placeholder="72"
+              <Field
+                label="مستوى إبصار العين اليسرى"
+                required
+                error={errors.levelLeft}
+              >
+                <Select
+                  value={va.levelLeft}
+                  onChange={(e) => setVA("levelLeft", e.target.value)}
+                  options={VISION_LEVELS}
+                  placeholder="اختر المستوى"
+                  invalid={!!errors.levelLeft}
+                />
+              </Field>
+              <Field
+                label="الإبصار مع التصحيح — يمين"
+                required
+                error={errors.correctedRight}
+              >
+                <Select
+                  value={va.correctedRight}
+                  onChange={(e) => setVA("correctedRight", e.target.value)}
+                  options={VISION_LEVELS}
+                  placeholder="اختر المستوى"
+                  invalid={!!errors.correctedRight}
+                />
+              </Field>
+              <Field
+                label="الإبصار مع التصحيح — يسار"
+                required
+                error={errors.correctedLeft}
+              >
+                <Select
+                  value={va.correctedLeft}
+                  onChange={(e) => setVA("correctedLeft", e.target.value)}
+                  options={VISION_LEVELS}
+                  placeholder="اختر المستوى"
+                  invalid={!!errors.correctedLeft}
+                />
+              </Field>
+              <Field label="عمى الألوان">
+                <PassFailToggle
+                  value={va.colorVision}
+                  onChange={(v) => setVA("colorVision", v)}
+                  passedLabel="سليم"
+                  failedLabel="مصاب"
                 />
               </Field>
             </div>
           </ReportSection>
 
-          {/* بنود الفحص */}
+          {/* فحص الأهلية — BRS §6 */}
           <ReportSection
-            title="بنود الفحص الطبي"
-            subtitle="حدّد حالة كل بند من بنود الفحص"
+            title="فحص الأهلية"
+            subtitle="الصحة النفسية وصحة الجسد"
             icon={<Stethoscope className="size-4" />}
           >
-            <div className="grid gap-3 sm:grid-cols-2">
-              {report.exams.map((ex) => {
-                const def = EXAM_ITEMS.find((x) => x.key === ex.key);
-                return (
-                  <div
-                    key={ex.key}
-                    className="rounded-[var(--r-md)] border border-[var(--ink-20)] p-3"
-                  >
-                    <div className="mb-2">
-                      <div className="text-[13px] font-semibold text-[var(--ink-90)]">
-                        {def?.label ?? ex.key}
-                      </div>
-                      {def?.hint && (
-                        <div className="text-[11px] text-[var(--ink-60)]">
-                          {def.hint}
-                        </div>
-                      )}
-                    </div>
-                    <PassFailToggle
-                      value={ex.value}
-                      onChange={(v) => setExam(ex.key, v)}
-                    />
-                  </div>
-                );
-              })}
+            <div className="grid gap-5 sm:grid-cols-2">
+              <Field label="الصحة النفسية">
+                <PassFailToggle
+                  value={elig.mentalHealth}
+                  onChange={(v) => setElig("mentalHealth", v)}
+                  passedLabel="سليم"
+                  failedLabel="غير سليم"
+                />
+              </Field>
+              <Field label="صحة الجسد">
+                <PassFailToggle
+                  value={elig.bodyHealth}
+                  onChange={(v) => setElig("bodyHealth", v)}
+                  passedLabel="سليم"
+                  failedLabel="غير سليم"
+                />
+              </Field>
             </div>
           </ReportSection>
 
-          {/* النتيجة والتوصية */}
+          {/* فصيلة الدم — BRS §6 */}
+          <ReportSection
+            title="فصيلة الدم"
+            icon={<Droplet className="size-4" />}
+          >
+            <div className="max-w-xs">
+              <Field label="فصيلة الدم" required error={errors.bloodType}>
+                <Select
+                  value={report.applicant.bloodType}
+                  onChange={(e) => setApplicant("bloodType", e.target.value)}
+                  options={BLOOD_TYPE_OPTIONS}
+                  placeholder="اختر الفصيلة"
+                  invalid={!!errors.bloodType}
+                />
+              </Field>
+            </div>
+          </ReportSection>
+
+          {/* النتيجة النهائية — BRS §6 */}
           <ReportSection
             title="النتيجة النهائية"
-            subtitle="القرار الطبي والتوصية"
+            subtitle="القرار الطبي النهائي"
             icon={<ClipboardCheck className="size-4" />}
           >
-            <Field label="القرار" required error={errors.result}>
+            <Field label="النتيجة" required error={errors.result}>
               <div className="grid grid-cols-2 gap-3">
                 {(["fit", "unfit"] as const).map((res) => {
                   const active = report.result === res;
@@ -359,29 +428,34 @@ export function ReportForm({
                             : "border-[var(--ink-20)] bg-white text-[var(--ink-70)] hover:bg-[var(--ink-10)]"
                       }`}
                     >
-                      {res === "fit" ? "لائق طبيًا" : "غير لائق"}
+                      {res === "fit" ? "لائق" : "غير لائق"}
                     </button>
                   );
                 })}
               </div>
             </Field>
-            <div className="mt-4">
-              <Field
-                label="التوصية الطبية"
-                required
-                error={errors.recommendation}
-              >
-                <TextArea
-                  rows={4}
-                  value={report.recommendation}
-                  onChange={(e) =>
-                    setReport((r) => ({ ...r, recommendation: e.target.value }))
-                  }
-                  placeholder="اكتب التوصية أو الملاحظات الطبية…"
-                  invalid={!!errors.recommendation}
-                />
-              </Field>
-            </div>
+            {report.result === "unfit" && (
+              <div className="mt-4">
+                <Field
+                  label="مبرّر عدم اللياقة"
+                  required
+                  error={errors.notFitJustification}
+                >
+                  <TextArea
+                    rows={4}
+                    value={report.notFitJustification ?? ""}
+                    onChange={(e) =>
+                      setReport((r) => ({
+                        ...r,
+                        notFitJustification: e.target.value,
+                      }))
+                    }
+                    placeholder="اكتب سبب عدم اللياقة الطبية…"
+                    invalid={!!errors.notFitJustification}
+                  />
+                </Field>
+              </div>
+            )}
           </ReportSection>
         </div>
 
@@ -495,8 +569,8 @@ export function ReportForm({
         open={confirm}
         onClose={() => setConfirm(false)}
         title="تأكيد الإرسال للتدقيق"
-        description="بعد الإرسال لن تتمكن من تعديل التقرير حتى يتم تدقيقه. هل تريد المتابعة؟"
-        tone="warn"
+        description={isFit ? brsMsg("MSG15") : brsMsg("MSG16")}
+        tone={isFit ? "warn" : "danger"}
         footer={
           <>
             <Button variant="secondary" onClick={() => setConfirm(false)}>
@@ -512,45 +586,44 @@ export function ReportForm({
   );
 }
 
-// تهيئة بنود الفحص في حال كانت ناقصة
-function normalizeExams(r: Report): Report {
-  if (r.exams.length === EXAM_ITEMS.length) return r;
-  const existing = new Map(r.exams.map((e) => [e.key, e]));
+// يضمن وجود بنى BRS §6 عند تحميل تقرير قديم.
+function normalize(r: Report): Report {
   return {
     ...r,
-    exams: EXAM_ITEMS.map(
-      (def) => existing.get(def.key) ?? { key: def.key, value: "passed" },
-    ),
+    visualAcuity: r.visualAcuity ?? emptyVisualAcuity(),
+    eligibility: r.eligibility ?? emptyEligibility(),
+    notFitJustification: r.notFitJustification ?? "",
   };
 }
 
 function computeSections(r: Report) {
-  const a = r.applicant;
+  const v = r.visualAcuity ?? emptyVisualAcuity();
   return [
     {
       key: "applicant",
-      label: "بيانات المتقدّم",
+      label: "بيانات المراجع",
+      done: !!r.applicant.name && !!r.applicant.nationalId,
+    },
+    {
+      key: "vision",
+      label: "حدّة الإبصار",
       done:
-        !!a.name.trim() &&
-        /^\d{10}$/.test(a.nationalId) &&
-        !!a.dob &&
-        !!a.gender &&
-        /^05\d{8}$/.test(a.phone),
+        !!v.levelRight &&
+        !!v.levelLeft &&
+        !!v.correctedRight &&
+        !!v.correctedLeft,
     },
     {
-      key: "vitals",
-      label: "العلامات الحيوية",
-      done: !!r.vitals.height && !!r.vitals.weight,
-    },
-    {
-      key: "exams",
-      label: "بنود الفحص",
-      done: r.exams.length > 0,
+      key: "blood",
+      label: "فصيلة الدم",
+      done: !!r.applicant.bloodType,
     },
     {
       key: "result",
-      label: "النتيجة والتوصية",
-      done: !!r.result && !!r.recommendation.trim(),
+      label: "النتيجة النهائية",
+      done:
+        !!r.result &&
+        (r.result !== "unfit" || !!r.notFitJustification?.trim()),
     },
   ];
 }

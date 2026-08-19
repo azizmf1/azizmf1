@@ -4,7 +4,7 @@ import { PageHeader } from "@/components/hms/Shell";
 import { ReportForm } from "@/components/hms/ReportForm";
 import { ApplicantVerification } from "@/components/hms/ApplicantVerification";
 import { emptyReport } from "@/data/reports";
-import type { VerifiedPatient } from "@/data/patientVerification";
+import type { VerifiedApplicant } from "@/data/patientVerification";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { can } from "@/lib/permissions";
 
@@ -14,17 +14,20 @@ export const Route = createFileRoute("/_app/hunting-medical/new")({
 
 function NewReportPage() {
   const user = useCurrentUser();
-  const [verified, setVerified] = useState<VerifiedPatient | null>(null);
+  const [verified, setVerified] = useState<VerifiedApplicant | null>(null);
 
-  // يُبنى التقرير فقط بعد التحقق، مع حقن البيانات الموثّقة.
+  // يُبنى التقرير فقط بعد التحقق، مع حقن البيانات الموثّقة (BRS §6).
   const initial = useMemo(() => {
     if (!user || !verified) return null;
     const report = emptyReport({ id: user.id, name: user.name, org: user.org });
     report.applicant = {
       ...report.applicant,
-      nationalId: verified.nationalId,
-      name: verified.name,
+      idType: verified.idType,
+      nationalId: verified.idNumber,
+      name: verified.fullNameAr,
+      fullNameEn: verified.fullNameEn,
       nationality: verified.nationality,
+      gender: verified.gender,
       dob: verified.dob,
     };
     return report;

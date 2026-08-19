@@ -1,71 +1,93 @@
 import { useState } from "react";
 import { BadgeCheck, ShieldCheck } from "lucide-react";
 import { Card, CardBody, CardHeader } from "@/components/hms/Card";
-import { Field, TextInput } from "@/components/hms/Field";
+import { Field, Select, TextInput } from "@/components/hms/Field";
 import { Button } from "@/components/hms/Button";
 import { toast } from "@/components/hms/Toast";
+import { ID_TYPES } from "@/data/lookups";
+import type { IdType } from "@/data/reports";
+import { brsMsg } from "@/data/brsMessages";
 import {
-  verifyPatient,
+  verifyApplicant,
+  isValidIdNumber,
   VERIFICATION_SOURCE,
-  type VerifiedPatient,
+  type VerifiedApplicant,
 } from "@/data/patientVerification";
 
 /**
- * خطوة التحقق المستقلة: رقم الهوية + تاريخ الميلاد ← التحقق من النظام الخارجي.
- * عند النجاح تُمرَّر البيانات الموثّقة عبر onVerified للمتابعة.
+ * خطوة التحقق (BRS §6): نوع الهوية + رقم الهوية + تاريخ الميلاد ← استعلام السجل الوطني.
+ * عند النجاح تُمرَّر البيانات الموثّقة (الاسم عربي/إنجليزي، الجنسية، الجنس) عبر onVerified.
  */
 export function ApplicantVerification({
   onVerified,
 }: {
-  onVerified: (patient: VerifiedPatient) => void;
+  onVerified: (applicant: VerifiedApplicant) => void;
 }) {
-  const [nationalId, setNationalId] = useState("");
+  const [idType, setIdType] = useState<IdType>("citizen");
+  const [idNumber, setIdNumber] = useState("");
   const [dob, setDob] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
+  const gcc = idType === "gcc";
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    if (!/^\d{10}$/.test(nationalId)) {
-      setError("رقم الهوية يجب أن يتكوّن من 10 أرقام.");
+    if (!isValidIdNumber(idType, idNumber)) {
+      setError(brsMsg("MSG04"));
       return;
     }
     if (!dob) {
-      setError("تاريخ الميلاد مطلوب.");
+      setError(brsMsg("MSG04"));
       return;
     }
     setLoading(true);
-    const res = await verifyPatient(nationalId, dob);
+    const res = await verifyApplicant(idType, idNumber, dob);
     setLoading(false);
     if (!res.ok) {
-      setError(res.error);
-      toast.error(res.error);
+      setError(brsMsg(res.messageId));
+      toast.error(brsMsg(res.messageId));
       return;
     }
-    toast.success("تم التحقق من هوية المتقدّم", VERIFICATION_SOURCE);
-    onVerified(res.patient);
+    toast.success(brsMsg("MSG00"), VERIFICATION_SOURCE);
+    onVerified(res.applicant);
   };
 
   return (
     <div className="mx-auto max-w-2xl p-4 lg:p-10">
       <Card>
         <CardHeader
-          title="التحقق من هوية المتقدّم"
-          subtitle={`تحقق من البيانات عبر ${VERIFICATION_SOURCE} قبل بدء التقرير`}
+          title="التحقق من هوية المراجع"
+          subtitle={`استعلام البيانات من ${VERIFICATION_SOURCE} قبل بدء التقرير`}
           icon={<ShieldCheck className="size-5" />}
         />
         <CardBody>
           <form onSubmit={submit} className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-4 sm:grid-cols-3">
+              <Field label="نوع الهوية" required>
+                <Select
+                  value={idType}
+                  onChange={(e) => {
+                    setIdType(e.target.value as IdType);
+                    setIdNumber("");
+                    setError("");
+                  }}
+                  options={ID_TYPES}
+                />
+              </Field>
               <Field label="رقم الهوية" required error={error || undefined}>
                 <TextInput
                   ltr
-                  value={nationalId}
+                  value={idNumber}
                   onChange={(e) =>
-                    setNationalId(e.target.value.replace(/\D/g, "").slice(0, 10))
+                    setIdNumber(
+                      gcc
+                        ? e.target.value.replace(/[^A-Za-z0-9]/g, "").slice(0, 20)
+                        : e.target.value.replace(/\D/g, "").slice(0, 10),
+                    )
                   }
-                  placeholder="10 أرقام"
+                  placeholder={gcc ? "حتى 20 خانة" : "10 أرقام"}
                   invalid={!!error}
                   autoFocus
                 />
@@ -82,9 +104,11 @@ export function ApplicantVerification({
             </div>
 
             <div className="rounded-[var(--r-md)] bg-[var(--ink-10)] px-3 py-2.5 text-[12px] leading-6 text-[var(--ink-60)]">
-              سيتم جلب <span className="font-semibold text-[var(--ink-80)]">الاسم والجنسية وتاريخ الميلاد</span> من
-              النظام الوطني، وتبقى بقية الحقول (الجنس، المدينة، الجوال، فصيلة الدم)
-              للإدخال اليدوي.
+              سيتم جلب{" "}
+              <span className="font-semibold text-[var(--ink-80)]">
+                الاسم (عربي/إنجليزي) والجنسية والجنس
+              </span>{" "}
+              من السجل الوطني، وتبقى بقية الحقول للإدخال اليدوي.
             </div>
 
             <Button

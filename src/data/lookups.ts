@@ -1,4 +1,10 @@
 // قوائم مرجعية ثابتة (Lookups) — كلها mock، لا باكند.
+// القوائم المضافة لـ BRS §6 تُقرأ من المصدر الموحّد shared/lookups.json.
+import lookupsJson from "../../shared/lookups.json";
+
+type BiCode = { code: string; ar: string; en: string };
+const toOptions = (arr: BiCode[]) =>
+  arr.map((x) => ({ value: x.code, label: x.ar }));
 
 // حالات التقرير — BRS §3 (رموز + AR/EN).
 export type ReportStatus =
@@ -36,6 +42,24 @@ export const STATUS_ORDER: ReportStatus[] = [
 ];
 
 export const BLOOD_TYPES = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"];
+
+export const BLOOD_TYPE_OPTIONS: { value: string; label: string }[] =
+  BLOOD_TYPES.map((b) => ({ value: b, label: b }));
+
+// أنواع الهوية — BRS §6 / OQ-04 (مواطن/مقيم/خليجي).
+export const ID_TYPES: { value: string; label: string }[] = toOptions(
+  lookupsJson.idTypes as BiCode[],
+);
+
+// مستويات حدّة الإبصار — BRS §6 / OQ-03 (تخدم بدون تصحيح ومع التصحيح).
+export const VISION_LEVELS: { value: string; label: string }[] = toOptions(
+  lookupsJson.visionLevels.values as BiCode[],
+);
+
+// النتيجة النهائية — BRS §6 (لائق/غير لائق).
+export const FINAL_RESULTS: { value: string; label: string }[] = toOptions(
+  lookupsJson.finalResult as BiCode[],
+);
 
 export const GENDERS: { value: string; label: string }[] = [
   { value: "male", label: "ذكر" },

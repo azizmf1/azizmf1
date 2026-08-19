@@ -2,6 +2,10 @@ import { describe, it, expect, beforeEach } from "vitest";
 import {
   SEED,
   emptyReport,
+  emptyVisualAcuity,
+  emptyEligibility,
+  findUniquenessBlock,
+  expirePriorNotFit,
   listReports,
   getReport,
   saveReport,
@@ -75,6 +79,58 @@ describe("CRUD", () => {
     saveReport(r);
     deleteReport(r.id);
     expect(getReport(r.id)).toBeUndefined();
+  });
+});
+
+describe("emptyReport يحتوي بنى BRS §6", () => {
+  it("ينشئ حدّة إبصار وأهلية افتراضية", () => {
+    const r = emptyReport(doctor);
+    expect(r.visualAcuity).toEqual(emptyVisualAcuity());
+    expect(r.eligibility).toEqual(emptyEligibility());
+    expect(r.notFitJustification).toBe("");
+  });
+});
+
+describe("BR-UNIQUE-REPORT — findUniquenessBlock", () => {
+  it("يمنع عند وجود تقرير ساري (مكتمل حديثًا) → valid", () => {
+    const block = findUniquenessBlock("1098234571");
+    expect(block?.kind).toBe("valid");
+  });
+
+  it("يمنع عند وجود تقرير تحت الإجراء → in_progress", () => {
+    const block = findUniquenessBlock("1076551203");
+    expect(block?.kind).toBe("in_progress");
+  });
+
+  it("يُعفي التقرير المنتهي", () => {
+    // HLR26000000008 منتهٍ لرقم 1088990011
+    expect(findUniquenessBlock("1088990011")).toBeNull();
+  });
+
+  it("لا يمنع رقمًا جديدًا", () => {
+    expect(findUniquenessBlock("1500000009")).toBeNull();
+  });
+
+  it("يتجاهل التقرير الحالي عبر excludeId", () => {
+    const self = getReport("HLR26000000002")!; // pending لنفس الرقم
+    expect(
+      findUniquenessBlock(self.applicant.nationalId, self.id),
+    ).toBeNull();
+  });
+});
+
+describe("expirePriorNotFit (BR08)", () => {
+  it("ينقل تقريرًا سابقًا غير لائق معتمد إلى منتهٍ", () => {
+    const r = {
+      ...emptyReport(doctor),
+      status: "completed" as const,
+      result: "unfit" as const,
+      applicant: { ...emptyReport(doctor).applicant, nationalId: "1234509876" },
+      decidedAt: new Date().toISOString(),
+    };
+    saveReport(r);
+    expirePriorNotFit("1234509876");
+    expect(getReport(r.id)?.status).toBe("expired");
   });
 });
 

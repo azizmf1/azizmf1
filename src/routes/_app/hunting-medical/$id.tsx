@@ -5,7 +5,7 @@ import {
   Check,
   Clock,
   Droplet,
-  Heart,
+  Eye,
   Pencil,
   Printer,
   Send,
@@ -24,15 +24,19 @@ import { NotFound } from "@/components/hms/States";
 import { toast } from "@/components/hms/Toast";
 import {
   appendTimeline,
+  emptyEligibility,
+  emptyVisualAcuity,
   getReport,
   saveReport,
+  type PassFail,
   type Report,
 } from "@/data/reports";
 import {
   CITIES,
-  EXAM_ITEMS,
   GENDERS,
+  ID_TYPES,
   NATIONALITIES,
+  VISION_LEVELS,
   lookupLabel,
 } from "@/data/lookups";
 import { age, fmtDateTime } from "@/lib/format";
@@ -141,8 +145,17 @@ function ReportViewPage() {
             icon={<UserRound className="size-4" />}
           >
             <dl className="grid gap-x-6 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
-              <Info label="الاسم" value={report.applicant.name} />
+              <Info
+                label="نوع الهوية"
+                value={lookupLabel(ID_TYPES, report.applicant.idType ?? "")}
+              />
               <Info label="رقم الهوية" value={report.applicant.nationalId} ltr />
+              <Info label="الاسم (عربي)" value={report.applicant.name} />
+              <Info
+                label="الاسم (إنجليزي)"
+                value={report.applicant.fullNameEn || "—"}
+                ltr
+              />
               <Info label="العمر" value={age(report.applicant.dob)} />
               <Info
                 label="الجنس"
@@ -156,7 +169,6 @@ function ReportViewPage() {
                 label="المدينة"
                 value={lookupLabel(CITIES, report.applicant.city)}
               />
-              <Info label="الجوال" value={report.applicant.phone} ltr />
               <Info
                 label="فصيلة الدم"
                 value={report.applicant.bloodType || "—"}
@@ -167,74 +179,70 @@ function ReportViewPage() {
           </ReportSection>
 
           <ReportSection
-            title="العلامات الحيوية"
-            icon={<Heart className="size-4" />}
+            title="فحص حدّة الإبصار"
+            icon={<Eye className="size-4" />}
           >
-            <dl className="grid gap-x-6 gap-y-4 sm:grid-cols-2 lg:grid-cols-4">
-              <Info label="الطول" value={vital(report.vitals.height, "سم")} ltr />
-              <Info label="الوزن" value={vital(report.vitals.weight, "كجم")} ltr />
-              <Info
-                label="ضغط الدم"
-                value={report.vitals.bloodPressure || "—"}
-                ltr
-              />
-              <Info
-                label="النبض"
-                value={vital(report.vitals.pulse, "نبضة/د")}
-                ltr
-              />
-            </dl>
+            {(() => {
+              const v = report.visualAcuity ?? emptyVisualAcuity();
+              return (
+                <dl className="grid gap-x-6 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
+                  <PfInfo label="نظر العين اليمنى" value={v.visionRight} />
+                  <PfInfo label="نظر العين اليسرى" value={v.visionLeft} />
+                  <PfInfo label="عمى الألوان" value={v.colorVision} okAr="سليم" noAr="مصاب" />
+                  <Info
+                    label="مستوى الإبصار — يمين"
+                    value={lookupLabel(VISION_LEVELS, v.levelRight)}
+                  />
+                  <Info
+                    label="مستوى الإبصار — يسار"
+                    value={lookupLabel(VISION_LEVELS, v.levelLeft)}
+                  />
+                  <span className="hidden lg:block" />
+                  <Info
+                    label="مع التصحيح — يمين"
+                    value={lookupLabel(VISION_LEVELS, v.correctedRight)}
+                  />
+                  <Info
+                    label="مع التصحيح — يسار"
+                    value={lookupLabel(VISION_LEVELS, v.correctedLeft)}
+                  />
+                </dl>
+              );
+            })()}
           </ReportSection>
 
           <ReportSection
-            title="بنود الفحص الطبي"
+            title="فحص الأهلية"
             icon={<Stethoscope className="size-4" />}
           >
-            <ul className="grid gap-2 sm:grid-cols-2">
-              {report.exams.map((ex) => {
-                const def = EXAM_ITEMS.find((x) => x.key === ex.key);
-                const ok = ex.value === "passed";
-                return (
-                  <li
-                    key={ex.key}
-                    className="flex items-center justify-between rounded-[var(--r-md)] border border-[var(--ink-20)] px-3 py-2.5"
-                  >
-                    <span className="text-[13px] text-[var(--ink-80)]">
-                      {def?.label ?? ex.key}
-                    </span>
-                    <span
-                      className={`inline-flex items-center gap-1 text-[12px] font-semibold ${
-                        ok ? "text-[var(--ok-700)]" : "text-[var(--err-700)]"
-                      }`}
-                    >
-                      {ok ? (
-                        <Check className="size-3.5" />
-                      ) : (
-                        <X className="size-3.5" />
-                      )}
-                      {ok ? "سليم" : "غير سليم"}
-                    </span>
-                  </li>
-                );
-              })}
-              {report.exams.length === 0 && (
-                <li className="text-[13px] text-[var(--ink-60)]">
-                  لم تُسجّل بنود الفحص بعد.
-                </li>
-              )}
-            </ul>
+            {(() => {
+              const el = report.eligibility ?? emptyEligibility();
+              return (
+                <dl className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
+                  <PfInfo label="الصحة النفسية" value={el.mentalHealth} />
+                  <PfInfo label="صحة الجسد" value={el.bodyHealth} />
+                </dl>
+              );
+            })()}
           </ReportSection>
 
           <ReportSection
-            title="النتيجة والتوصية"
+            title="النتيجة النهائية"
             icon={<Activity className="size-4" />}
           >
             <div className="flex flex-wrap items-center gap-3">
               <ResultBadge result={report.result} size="lg" />
             </div>
-            <p className="mt-4 whitespace-pre-wrap text-[14px] leading-7 text-[var(--ink-80)]">
-              {report.recommendation || "لا توجد توصية مسجّلة."}
-            </p>
+            {report.result === "unfit" && (
+              <div className="mt-4">
+                <div className="text-[12px] text-[var(--ink-50)]">
+                  مبرّر عدم اللياقة
+                </div>
+                <p className="mt-1 whitespace-pre-wrap text-[14px] leading-7 text-[var(--ink-80)]">
+                  {report.notFitJustification || "—"}
+                </p>
+              </div>
+            )}
           </ReportSection>
         </div>
 
@@ -322,8 +330,31 @@ function ReportViewPage() {
   );
 }
 
-function vital(v: string, unit: string) {
-  return v ? `${v} ${unit}` : "—";
+function PfInfo({
+  label,
+  value,
+  okAr = "سليم",
+  noAr = "غير سليم",
+}: {
+  label: string;
+  value: PassFail;
+  okAr?: string;
+  noAr?: string;
+}) {
+  const ok = value === "passed";
+  return (
+    <div>
+      <dt className="text-[12px] text-[var(--ink-50)]">{label}</dt>
+      <dd
+        className={`mt-0.5 inline-flex items-center gap-1 text-[14px] font-semibold ${
+          ok ? "text-[var(--ok-700)]" : "text-[var(--err-700)]"
+        }`}
+      >
+        {ok ? <Check className="size-3.5" /> : <X className="size-3.5" />}
+        {ok ? okAr : noAr}
+      </dd>
+    </div>
+  );
 }
 
 function Info({
