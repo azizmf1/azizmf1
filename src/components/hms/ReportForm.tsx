@@ -61,6 +61,8 @@ export function ReportForm({
   const [report, setReport] = useState<Report>(() => normalize(initial));
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [confirm, setConfirm] = useState(false);
+  const [confirmDraft, setConfirmDraft] = useState(false); // UC03 — MSG10
+  const [confirmCancel, setConfirmCancel] = useState(false); // UC06 — MSG03
 
   const va = report.visualAcuity ?? emptyVisualAcuity();
   const elig = report.eligibility ?? emptyEligibility();
@@ -127,11 +129,17 @@ export function ReportForm({
     return saveReport(next);
   }
 
-  const saveDraft = () => {
+  // UC03 — حفظ كمسودة: تأكيد (MSG10) قبل الحفظ للإرسال لاحقًا.
+  const tryDraft = () => {
     if (!report.applicant.bloodType) {
       toast.warn(brsMsg("MSG05"));
       return;
     }
+    setConfirmDraft(true);
+  };
+
+  const doSaveDraft = () => {
+    setConfirmDraft(false);
     persist("draft", mode === "create" ? "إنشاء مسودة" : "تحديث المسودة");
     toast.success(brsMsg("MSG00"));
     navigate({ to: "/hunting-medical/$id", params: { id: report.id } });
@@ -547,14 +555,14 @@ export function ReportForm({
           <div className="flex flex-1 items-center justify-end gap-2">
             <Button
               variant="secondary"
-              onClick={() => navigate({ to: "/hunting-medical" })}
+              onClick={() => setConfirmCancel(true)}
             >
               إلغاء
             </Button>
             <Button
               variant="secondary"
               icon={<Save className="size-4" />}
-              onClick={saveDraft}
+              onClick={tryDraft}
             >
               حفظ كمسودة
             </Button>
@@ -578,6 +586,47 @@ export function ReportForm({
             </Button>
             <Button icon={<Send className="size-4" />} onClick={doSubmit}>
               تأكيد الإرسال
+            </Button>
+          </>
+        }
+      />
+
+      {/* UC03 — تأكيد حفظ المسودة (MSG10) */}
+      <Modal
+        open={confirmDraft}
+        onClose={() => setConfirmDraft(false)}
+        title="حفظ كمسودة"
+        description={brsMsg("MSG10")}
+        tone="default"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setConfirmDraft(false)}>
+              تراجع
+            </Button>
+            <Button icon={<Save className="size-4" />} onClick={doSaveDraft}>
+              حفظ المسودة
+            </Button>
+          </>
+        }
+      />
+
+      {/* UC06 — تأكيد الإلغاء دون حفظ (MSG03) */}
+      <Modal
+        open={confirmCancel}
+        onClose={() => setConfirmCancel(false)}
+        title="إلغاء دون حفظ"
+        description={brsMsg("MSG03")}
+        tone="warn"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setConfirmCancel(false)}>
+              متابعة التعديل
+            </Button>
+            <Button
+              variant="danger"
+              onClick={() => navigate({ to: "/hunting-medical" })}
+            >
+              نعم، إلغاء
             </Button>
           </>
         }

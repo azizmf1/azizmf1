@@ -33,9 +33,10 @@ import {
   type Report,
 } from "@/data/reports";
 import { ID_TYPES, VISION_LEVELS, lookupLabel } from "@/data/lookups";
+import { enqueueApprovedReport } from "@/data/reportSharing";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { can } from "@/lib/permissions";
-import { msg } from "@/data/messages";
+import { brsMsg } from "@/data/brsMessages";
 
 export const Route = createFileRoute("/_app/hunting-medical/$id/audit")({
   component: AuditPage,
@@ -62,7 +63,7 @@ function AuditPage() {
 
   const decide = (decision: "approve" | "return") => {
     if (decision === "return" && !note.trim()) {
-      setNoteErr("ملاحظة الإعادة إلزامية.");
+      setNoteErr(brsMsg("MSG11")); // ملاحظة الإعادة إلزامية
       setDialog(null);
       return;
     }
@@ -73,31 +74,43 @@ function AuditPage() {
       decidedAt: now,
       updatedAt: now,
     };
-    const next =
-      decision === "approve"
-        ? appendTimeline(
-            { ...base, status: "completed" },
-            {
-              at: now,
-              actorId: user.id,
-              actorName: user.name,
-              action: "اعتماد التقرير",
-              note: note.trim() || undefined,
-            },
-          )
-        : appendTimeline(
-            { ...base, status: "requires_modification", auditNote: note.trim() },
-            {
-              at: now,
-              actorId: user.id,
-              actorName: user.name,
-              action: "إعادة للتعديل",
-              note: note.trim(),
-            },
-          );
+    let next: Report;
+    if (decision === "approve") {
+      // UC04: الحالة = مكتمل + مشاركة الجهات المختصة (MEWA — OQ-01) عبر صندوق الصادر.
+      // الاعتماد يكتمل بغضّ النظر عن نتيجة المشاركة.
+      const completed: Report = { ...base, status: "completed" };
+      const sharing = enqueueApprovedReport(completed);
+      next = appendTimeline(
+        { ...completed, sharingStatus: sharing },
+        {
+          at: now,
+          actorId: user.id,
+          actorName: user.name,
+          action: "اعتماد التقرير",
+          note: note.trim() || undefined,
+        },
+      );
+      next = appendTimeline(next, {
+        at: now,
+        actorId: user.id,
+        actorName: user.name,
+        action: "إرسال التقرير للجهات المختصة (قيد الإرسال)",
+      });
+    } else {
+      next = appendTimeline(
+        { ...base, status: "requires_modification", auditNote: note.trim() },
+        {
+          at: now,
+          actorId: user.id,
+          actorName: user.name,
+          action: "إعادة للتعديل",
+          note: note.trim(),
+        },
+      );
+    }
     saveReport(next);
     setDialog(null);
-    toast.success(decision === "approve" ? msg("MSG08") : msg("MSG09"));
+    toast.success(brsMsg("MSG00"));
     navigate({ to: "/hunting-medical/$id", params: { id } });
   };
 
@@ -253,7 +266,7 @@ function AuditPage() {
                   icon={<RotateCcw className="size-4" />}
                   onClick={() => {
                     if (!note.trim()) {
-                      setNoteErr("ملاحظة الإعادة إلزامية.");
+                      setNoteErr(brsMsg("MSG11"));
                       return;
                     }
                     setDialog("return");
@@ -271,7 +284,7 @@ function AuditPage() {
         open={dialog === "approve"}
         onClose={() => setDialog(null)}
         title="اعتماد التقرير"
-        description="سيتم اعتماد التقرير نهائيًا وإتاحته للطباعة. هل تريد المتابعة؟"
+        description={report.result === "unfit" ? brsMsg("MSG18") : brsMsg("MSG17")}
         tone="success"
         footer={
           <>

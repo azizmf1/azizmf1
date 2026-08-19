@@ -6,6 +6,8 @@ import {
   emptyEligibility,
   findUniquenessBlock,
   expirePriorNotFit,
+  isReportExpired,
+  validUntil,
   listReports,
   getReport,
   saveReport,
@@ -116,6 +118,33 @@ describe("BR-UNIQUE-REPORT — findUniquenessBlock", () => {
     expect(
       findUniquenessBlock(self.applicant.nationalId, self.id),
     ).toBeNull();
+  });
+});
+
+describe("الصلاحية — isReportExpired / validUntil", () => {
+  const base = emptyReport(doctor);
+  it("مكتمل حديث الاعتماد: ساري + له تاريخ انتهاء", () => {
+    const r = {
+      ...base,
+      status: "completed" as const,
+      decidedAt: new Date().toISOString(),
+    };
+    expect(isReportExpired(r)).toBe(false);
+    expect(validUntil(r)).toBeTruthy();
+  });
+  it("مكتمل تجاوز 360 يومًا: منتهٍ", () => {
+    const old = new Date();
+    old.setDate(old.getDate() - 400);
+    const r = {
+      ...base,
+      status: "completed" as const,
+      decidedAt: old.toISOString(),
+    };
+    expect(isReportExpired(r)).toBe(true);
+  });
+  it("حالة expired: منتهٍ دائمًا، ولا تاريخ صلاحية للمسودة", () => {
+    expect(isReportExpired({ ...base, status: "expired" })).toBe(true);
+    expect(validUntil(base)).toBeNull();
   });
 });
 

@@ -11,6 +11,7 @@ import {
   emptyEligibility,
   emptyVisualAcuity,
   getReport,
+  isReportExpired,
   type Report,
 } from "@/data/reports";
 import {
@@ -41,6 +42,24 @@ function PrintPage() {
 
   if (!user || report === undefined) return null;
   if (report === null) return <NotFound />;
+
+  // UC07/OQ-13: الطباعة متاحة فقط للتقارير المكتملة السارية.
+  if (report.status !== "completed" || isReportExpired(report)) {
+    return (
+      <div className="mx-auto max-w-md p-10 text-center">
+        <p className="text-[14px] font-semibold text-[var(--ink-80)]">
+          الطباعة متاحة فقط للتقارير المكتملة السارية الصلاحية.
+        </p>
+        <Link
+          to="/hunting-medical/$id"
+          params={{ id: report.id }}
+          className="mt-4 inline-flex items-center gap-1.5 text-[14px] font-medium text-[var(--brand-90)] hover:underline"
+        >
+          <ArrowRight className="size-4 rtl-flip" /> رجوع للتقرير
+        </Link>
+      </div>
+    );
+  }
 
   const fit = report.result === "fit";
 

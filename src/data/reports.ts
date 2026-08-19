@@ -7,6 +7,8 @@ export type Result = "fit" | "unfit" | null;
 export type ExamValue = "passed" | "failed";
 export type PassFail = "passed" | "failed";
 export type IdType = "citizen" | "resident" | "gcc" | "";
+// حالة مشاركة التقرير مع الجهات المختصة (MEWA) — OQ-01 (بوابة داخلية فقط)
+export type SharingStatus = "not_shared" | "pending" | "shared" | "failed";
 
 export interface Applicant {
   name: string; // الاسم الكامل بالعربية — من سجل الأحوال (BRS §6)
@@ -68,6 +70,7 @@ export interface Report {
   eligibility?: Eligibility;
   result: Result; // النتيجة النهائية: fit=لائق / unfit=غير لائق
   notFitJustification?: string; // مبرّر عدم اللياقة — إلزامي عند "غير لائق"
+  sharingStatus?: SharingStatus; // مشاركة الجهات المختصة (MEWA) — OQ-01
   // ---- حقول قديمة (خارج BRS، محفوظة للتوافق — OQ-19) ----
   licenseType: string; // legacy
   vitals: Vitals; // legacy
@@ -259,6 +262,26 @@ export function expirePriorNotFit(idNumber: string, exceptId?: string) {
     }
   }
   if (changed) write(all);
+}
+
+// ---------------------------------------------------------------- الصلاحية (§4)
+// تقرير منتهي الصلاحية إن كانت حالته expired، أو مكتمل تجاوز 360 يومًا من الاعتماد.
+export function isReportExpired(r: Report): boolean {
+  if (r.status === "expired") return true;
+  if (r.status === "completed") {
+    const base = r.decidedAt ?? r.updatedAt;
+    return daysSince(base) > VALID_DAYS;
+  }
+  return false;
+}
+
+// تاريخ انتهاء صلاحية التقرير المكتمل (ISO)، أو null لغير المكتمل.
+export function validUntil(r: Report): string | null {
+  if (r.status !== "completed") return null;
+  const base = r.decidedAt ?? r.updatedAt;
+  const d = new Date(base);
+  d.setDate(d.getDate() + VALID_DAYS);
+  return d.toISOString();
 }
 
 // إعادة تهيئة البذرة (لزر "إعادة ضبط البيانات التجريبية")

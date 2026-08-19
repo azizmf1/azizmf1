@@ -27,22 +27,32 @@ import {
   emptyEligibility,
   emptyVisualAcuity,
   getReport,
+  isReportExpired,
   saveReport,
+  validUntil,
   type PassFail,
   type Report,
 } from "@/data/reports";
 import {
   CITIES,
+  EXAM_ITEMS,
   GENDERS,
   ID_TYPES,
   NATIONALITIES,
   VISION_LEVELS,
   lookupLabel,
 } from "@/data/lookups";
-import { age, fmtDateTime } from "@/lib/format";
+import { age, fmtDate, fmtDateTime } from "@/lib/format";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { can } from "@/lib/permissions";
 import { msg } from "@/data/messages";
+
+const SHARING_LABEL: Record<string, string> = {
+  not_shared: "غير مُشاركة",
+  pending: "قيد الإرسال",
+  shared: "تمت المشاركة",
+  failed: "تعذّرت المشاركة",
+};
 
 export const Route = createFileRoute("/_app/hunting-medical/$id")({
   component: ReportViewPage,
@@ -94,14 +104,19 @@ function ReportViewPage() {
         ]}
         action={
           <div className="flex flex-wrap items-center gap-2">
-            <Link
-              to="/hunting-medical/$id/print"
-              params={{ id: report.id }}
-            >
-              <Button variant="secondary" icon={<Printer className="size-4" />}>
-                طباعة
-              </Button>
-            </Link>
+            {report.status === "completed" && !isReportExpired(report) && (
+              <Link
+                to="/hunting-medical/$id/print"
+                params={{ id: report.id }}
+              >
+                <Button
+                  variant="secondary"
+                  icon={<Printer className="size-4" />}
+                >
+                  طباعة
+                </Button>
+              </Link>
+            )}
             {can(user, "report:edit", report) && (
               <Link to="/hunting-medical/$id/edit" params={{ id: report.id }}>
                 <Button variant="secondary" icon={<Pencil className="size-4" />}>
@@ -129,6 +144,22 @@ function ReportViewPage() {
       <div className="grid gap-6 p-4 lg:grid-cols-[1fr_320px] lg:p-10">
         {/* المحتوى */}
         <div className="space-y-6">
+          {/* UC05 — بانر الصلاحية (§4) */}
+          {isReportExpired(report) ? (
+            <div className="rounded-[var(--r-lg)] border border-[var(--err-100)] bg-[var(--err-50)] p-4 text-[13px] font-semibold text-[var(--err-700)]">
+              انتهت صلاحية هذا التقرير — غير قابل للطباعة أو التعديل أو التدقيق.
+            </div>
+          ) : (
+            report.status === "completed" &&
+            validUntil(report) && (
+              <div className="rounded-[var(--r-lg)] border border-[var(--ok-100)] bg-[var(--ok-50)] p-4 text-[13px] font-semibold text-[var(--ok-700)]">
+                تقرير ساري الصلاحية حتى{" "}
+                <span className="num">{fmtDate(validUntil(report)!)}</span> (360
+                يومًا من الاعتماد).
+              </div>
+            )
+          )}
+
           {report.status === "requires_modification" && report.auditNote && (
             <div className="rounded-[var(--r-lg)] border border-[var(--err-100)] bg-[var(--err-50)] p-4">
               <div className="text-[13px] font-bold text-[var(--err-700)]">
@@ -244,6 +275,51 @@ function ReportViewPage() {
               </div>
             )}
           </ReportSection>
+
+          {/* OQ-19 — بيانات قديمة (خارج BRS)، للقراءة فقط، على شاشة العرض فقط */}
+          {(report.exams.length > 0 ||
+            report.vitals.height ||
+            report.vitals.weight ||
+            report.vitals.bloodPressure ||
+            report.vitals.pulse) && (
+            <details className="rounded-[var(--r-lg)] border border-[var(--ink-20)] bg-[var(--ink-10)]/40 p-4">
+              <summary className="cursor-pointer text-[13px] font-semibold text-[var(--ink-70)]">
+                بيانات قديمة (خارج المتطلبات — للاطلاع فقط)
+              </summary>
+              <div className="mt-3 space-y-3">
+                <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2 lg:grid-cols-4">
+                  <Info label="الطول" value={report.vitals.height ? `${report.vitals.height} سم` : "—"} ltr />
+                  <Info label="الوزن" value={report.vitals.weight ? `${report.vitals.weight} كجم` : "—"} ltr />
+                  <Info label="ضغط الدم" value={report.vitals.bloodPressure || "—"} ltr />
+                  <Info label="النبض" value={report.vitals.pulse || "—"} ltr />
+                </dl>
+                {report.exams.length > 0 && (
+                  <ul className="grid gap-1.5 sm:grid-cols-2">
+                    {report.exams.map((ex) => (
+                      <li
+                        key={ex.key}
+                        className="flex items-center justify-between text-[12px] text-[var(--ink-70)]"
+                      >
+                        <span>
+                          {EXAM_ITEMS.find((x) => x.key === ex.key)?.label ??
+                            ex.key}
+                        </span>
+                        <span
+                          className={
+                            ex.value === "passed"
+                              ? "text-[var(--ok-700)]"
+                              : "text-[var(--err-700)]"
+                          }
+                        >
+                          {ex.value === "passed" ? "سليم" : "غير سليم"}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </details>
+          )}
         </div>
 
         {/* الجانب: الحالة + Timeline */}
@@ -265,6 +341,12 @@ function ReportViewPage() {
                 <Row label="المنشأة" value={report.doctor.org} />
                 {report.auditor && (
                   <Row label="المدقّق" value={report.auditor.name} />
+                )}
+                {report.status === "completed" && report.sharingStatus && (
+                  <Row
+                    label="مشاركة الجهات المختصة"
+                    value={SHARING_LABEL[report.sharingStatus]}
+                  />
                 )}
                 <Row label="آخر تحديث" value={fmtDateTime(report.updatedAt)} ltr />
               </div>
