@@ -13,7 +13,8 @@ const TONES: Record<string, string> = {
 };
 
 export function StatusBadge({ status }: { status: ReportStatus }) {
-  const s = STATUSES[status];
+  // احتياط ضد بيانات قديمة برموز حالة غير معروفة (تجنّب انهيار الواجهة).
+  const s = STATUSES[status] ?? { ar: String(status || "—"), tone: "gray" };
   return (
     <span className={cn("inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[12px] font-medium", TONES[s.tone])}>
       <span className="size-1.5 rounded-full bg-current opacity-70" />

@@ -86,7 +86,9 @@ export interface Report {
   timeline: TimelineEntry[];
 }
 
-const KEY = "hms_reports";
+// النسخة v2: مخطط BRS §6 (حقول/رموز حالة جديدة). تغيير المفتاح يتجاهل أي بيانات
+// قديمة غير متوافقة في المتصفح ويعيد تحميل البذرة الجديدة تلقائيًا.
+const KEY = "hms_reports_v2";
 
 function isBrowser() {
   return typeof window !== "undefined" && !!window.localStorage;
