@@ -1,0 +1,99 @@
+{
+  "$comment": "BRS v1.0 §3/§10 lookups — SINGLE SOURCE OF TRUTH. Bilingual by code. Per BA (OQ-17) the API returns lookup codes; the front-end resolves labels from this file.",
+  "version": 1,
+
+  "statuses": [
+    { "code": "draft", "ar": "مسودة", "en": "Draft" },
+    { "code": "pending_audit", "ar": "بانتظار التدقيق", "en": "Pending for Auditing" },
+    { "code": "completed", "ar": "مكتمل", "en": "Completed" },
+    { "code": "requires_modification", "ar": "معاد إلى المدخل", "en": "Requires Modification" },
+    { "code": "expired", "ar": "منتهي", "en": "Expired" }
+  ],
+
+  "idTypes": [
+    { "code": "citizen", "ar": "مواطن", "en": "Citizen", "$rule": "PROVISIONAL RFI-001/OQ-04: 10 digits starting with 1" },
+    { "code": "resident", "ar": "مقيم", "en": "Resident", "$rule": "PROVISIONAL RFI-001/OQ-04: 10 digits starting with 2" },
+    { "code": "gcc", "ar": "مواطن خليجي", "en": "GCC", "$rule": "PROVISIONAL RFI-001/OQ-04: up to 20 alphanumeric" }
+  ],
+
+  "actionTypes": [
+    { "code": "save_draft", "ar": "حفظ كمسودة", "en": "Save as Draft" },
+    { "code": "submit", "ar": "إرسال", "en": "Submit" },
+    { "code": "edit", "ar": "تعديل", "en": "Edit" },
+    { "code": "approve", "ar": "اعتماد", "en": "Approve" },
+    { "code": "return_to_data_entry", "ar": "إعادة إلى مدخل البيانات", "en": "Return to Data Entry" }
+  ],
+
+  "finalResult": [
+    { "code": "fit", "ar": "لائق", "en": "Fit" },
+    { "code": "not_fit", "ar": "غير لائق", "en": "Not Fit" }
+  ],
+
+  "passFail": [
+    { "code": "passed", "ar": "سليم", "en": "Passed" },
+    { "code": "failed", "ar": "غير سليم", "en": "Failed" }
+  ],
+
+  "gender": [
+    { "code": "male", "ar": "ذكر", "en": "Male" },
+    { "code": "female", "ar": "أنثى", "en": "Female" }
+  ],
+
+  "bloodType": [
+    { "code": "A+", "ar": "A+", "en": "A+" },
+    { "code": "A-", "ar": "A-", "en": "A-" },
+    { "code": "B+", "ar": "B+", "en": "B+" },
+    { "code": "B-", "ar": "B-", "en": "B-" },
+    { "code": "AB+", "ar": "AB+", "en": "AB+" },
+    { "code": "AB-", "ar": "AB-", "en": "AB-" },
+    { "code": "O+", "ar": "O+", "en": "O+" },
+    { "code": "O-", "ar": "O-", "en": "O-" }
+  ],
+
+  "visionLevels": {
+    "$comment": "PROVISIONAL RFI-001/OQ-03: one list serves both uncorrected and corrected vision.",
+    "values": [
+      { "code": "1", "ar": "1", "en": "1" },
+      { "code": "2", "ar": "2", "en": "2" },
+      { "code": "3", "ar": "3", "en": "3" },
+      { "code": "4", "ar": "4", "en": "4" },
+      { "code": "5", "ar": "5", "en": "5" },
+      { "code": "6", "ar": "6", "en": "6" },
+      { "code": "no_vision", "ar": "لا يوجد نظر", "en": "No Vision" }
+    ]
+  },
+
+  "roles": [
+    { "code": "data_entry", "ar": "مدخل بيانات", "en": "Data Entry" },
+    { "code": "data_auditor", "ar": "مدقّق", "en": "Data Auditor" },
+    { "code": "system_admin", "ar": "مدير النظام", "en": "System Admin" }
+  ],
+
+  "permissions": [
+    "Create Medical report",
+    "Create\\Edit Medical report",
+    "Audit Medical report",
+    "View Medical report",
+    "Export Medical report"
+  ],
+
+  "nationality": {
+    "$comment": "PROVISIONAL RFI-001/OQ-02: served by Seha lookup service; searchable DDL. Seed fallback only.",
+    "source": "seha-lookup",
+    "seed": [
+      { "code": "SA", "ar": "سعودي", "en": "Saudi" },
+      { "code": "AE", "ar": "إماراتي", "en": "Emirati" },
+      { "code": "BH", "ar": "بحريني", "en": "Bahraini" },
+      { "code": "KW", "ar": "كويتي", "en": "Kuwaiti" },
+      { "code": "OM", "ar": "عُماني", "en": "Omani" },
+      { "code": "QA", "ar": "قطري", "en": "Qatari" },
+      { "code": "EG", "ar": "مصري", "en": "Egyptian" },
+      { "code": "YE", "ar": "يمني", "en": "Yemeni" }
+    ]
+  },
+
+  "sehaSourced": {
+    "$comment": "PROVISIONAL RFI-001/OQ-18: City, Region, Medical Center, Medical Org. Type are served by Seha; on the form derived from the user's MC session context (read-only).",
+    "fields": ["city", "region", "medicalCenter", "medicalOrgType"]
+  }
+}

@@ -7,13 +7,19 @@ import { useEffect, useState } from "react";
 import { ArrowRight, Printer } from "lucide-react";
 import { Button } from "@/components/hms/Button";
 import { NotFound } from "@/components/hms/States";
-import { getReport, type Report } from "@/data/reports";
+import {
+  emptyEligibility,
+  emptyVisualAcuity,
+  getReport,
+  isReportExpired,
+  type Report,
+} from "@/data/reports";
 import {
   CITIES,
-  EXAM_ITEMS,
   GENDERS,
-  LICENSE_TYPES,
+  ID_TYPES,
   NATIONALITIES,
+  VISION_LEVELS,
   lookupLabel,
 } from "@/data/lookups";
 import { age, fmtDate, fmtDateTime } from "@/lib/format";
@@ -36,6 +42,24 @@ function PrintPage() {
 
   if (!user || report === undefined) return null;
   if (report === null) return <NotFound />;
+
+  // UC07/OQ-13: الطباعة متاحة فقط للتقارير المكتملة السارية.
+  if (report.status !== "completed" || isReportExpired(report)) {
+    return (
+      <div className="mx-auto max-w-md p-10 text-center">
+        <p className="text-[14px] font-semibold text-[var(--ink-80)]">
+          الطباعة متاحة فقط للتقارير المكتملة السارية الصلاحية.
+        </p>
+        <Link
+          to="/hunting-medical/$id"
+          params={{ id: report.id }}
+          className="mt-4 inline-flex items-center gap-1.5 text-[14px] font-medium text-[var(--brand-90)] hover:underline"
+        >
+          <ArrowRight className="size-4 rtl-flip" /> رجوع للتقرير
+        </Link>
+      </div>
+    );
+  }
 
   const fit = report.result === "fit";
 
@@ -91,12 +115,21 @@ function PrintPage() {
           </div>
         </header>
 
-        {/* بيانات المتقدّم */}
-        <PrintSection title="بيانات المتقدّم">
+        {/* بيانات المراجع */}
+        <PrintSection title="بيانات المراجع">
           <div className="grid grid-cols-3 gap-y-3">
-            <PItem label="الاسم" value={report.applicant.name} />
+            <PItem
+              label="نوع الهوية"
+              value={lookupLabel(ID_TYPES, report.applicant.idType ?? "")}
+            />
             <PItem label="رقم الهوية" value={report.applicant.nationalId} ltr />
             <PItem label="العمر" value={age(report.applicant.dob)} />
+            <PItem label="الاسم (عربي)" value={report.applicant.name} />
+            <PItem
+              label="الاسم (إنجليزي)"
+              value={report.applicant.fullNameEn || "—"}
+              ltr
+            />
             <PItem
               label="الجنس"
               value={lookupLabel(GENDERS, report.applicant.gender)}
@@ -109,83 +142,77 @@ function PrintPage() {
               label="المدينة"
               value={lookupLabel(CITIES, report.applicant.city)}
             />
-            <PItem label="الجوال" value={report.applicant.phone} ltr />
             <PItem
               label="فصيلة الدم"
               value={report.applicant.bloodType || "—"}
               ltr
             />
-            <PItem
-              label="نوع الرخصة"
-              value={lookupLabel(LICENSE_TYPES, report.licenseType)}
-            />
           </div>
         </PrintSection>
 
-        {/* العلامات الحيوية */}
-        <PrintSection title="العلامات الحيوية">
-          <div className="grid grid-cols-4 gap-y-3">
-            <PItem
-              label="الطول"
-              value={report.vitals.height ? `${report.vitals.height} سم` : "—"}
-              ltr
-            />
-            <PItem
-              label="الوزن"
-              value={report.vitals.weight ? `${report.vitals.weight} كجم` : "—"}
-              ltr
-            />
-            <PItem
-              label="ضغط الدم"
-              value={report.vitals.bloodPressure || "—"}
-              ltr
-            />
-            <PItem
-              label="النبض"
-              value={report.vitals.pulse || "—"}
-              ltr
-            />
+        {/* فحص حدّة الإبصار */}
+        <PrintSection title="فحص حدّة الإبصار">
+          {(() => {
+            const v = report.visualAcuity ?? emptyVisualAcuity();
+            const pf = (x: string) => (x === "passed" ? "سليم" : "غير سليم");
+            return (
+              <div className="grid grid-cols-3 gap-y-3">
+                <PItem label="نظر العين اليمنى" value={pf(v.visionRight)} />
+                <PItem label="نظر العين اليسرى" value={pf(v.visionLeft)} />
+                <PItem
+                  label="عمى الألوان"
+                  value={v.colorVision === "passed" ? "سليم" : "مصاب"}
+                />
+                <PItem
+                  label="مستوى الإبصار — يمين"
+                  value={lookupLabel(VISION_LEVELS, v.levelRight)}
+                />
+                <PItem
+                  label="مستوى الإبصار — يسار"
+                  value={lookupLabel(VISION_LEVELS, v.levelLeft)}
+                />
+                <div />
+                <PItem
+                  label="مع التصحيح — يمين"
+                  value={lookupLabel(VISION_LEVELS, v.correctedRight)}
+                />
+                <PItem
+                  label="مع التصحيح — يسار"
+                  value={lookupLabel(VISION_LEVELS, v.correctedLeft)}
+                />
+              </div>
+            );
+          })()}
+        </PrintSection>
+
+        {/* فحص الأهلية */}
+        <PrintSection title="فحص الأهلية">
+          {(() => {
+            const el = report.eligibility ?? emptyEligibility();
+            const pf = (x: string) => (x === "passed" ? "سليم" : "غير سليم");
+            return (
+              <div className="grid grid-cols-3 gap-y-3">
+                <PItem label="الصحة النفسية" value={pf(el.mentalHealth)} />
+                <PItem label="صحة الجسد" value={pf(el.bodyHealth)} />
+              </div>
+            );
+          })()}
+        </PrintSection>
+
+        {/* القرار الطبي */}
+        <PrintSection title="النتيجة النهائية">
+          <div className="text-[13px] font-bold text-[var(--ink-90)]">
+            {report.result
+              ? report.result === "fit"
+                ? "لائق طبيًا"
+                : "غير لائق"
+              : "غير محدد"}
           </div>
-        </PrintSection>
-
-        {/* بنود الفحص */}
-        <PrintSection title="نتائج الفحص الطبي">
-          <table className="w-full border-collapse text-[12px]">
-            <tbody>
-              {chunk(report.exams, 2).map((pair, i) => (
-                <tr key={i}>
-                  {pair.map((ex) => {
-                    const def = EXAM_ITEMS.find((x) => x.key === ex.key);
-                    const ok = ex.value === "passed";
-                    return (
-                      <td
-                        key={ex.key}
-                        className="border border-[var(--ink-20)] px-3 py-2"
-                      >
-                        <span className="text-[var(--ink-80)]">
-                          {def?.label ?? ex.key}
-                        </span>
-                        <span
-                          className={`float-left font-bold ${
-                            ok ? "text-[var(--ok-700)]" : "text-[var(--err-700)]"
-                          }`}
-                        >
-                          {ok ? "سليم" : "غير سليم"}
-                        </span>
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </PrintSection>
-
-        {/* النتيجة والتوصية */}
-        <PrintSection title="القرار والتوصية الطبية">
-          <p className="whitespace-pre-wrap text-[13px] leading-7 text-[var(--ink-80)]">
-            {report.recommendation || "—"}
-          </p>
+          {report.result === "unfit" && (
+            <p className="mt-2 whitespace-pre-wrap text-[13px] leading-7 text-[var(--ink-80)]">
+              مبرّر عدم اللياقة: {report.notFitJustification || "—"}
+            </p>
+          )}
         </PrintSection>
 
         {/* التوقيعات */}
@@ -208,12 +235,6 @@ function PrintPage() {
       </div>
     </div>
   );
-}
-
-function chunk<T>(arr: T[], n: number): T[][] {
-  const out: T[][] = [];
-  for (let i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n));
-  return out;
 }
 
 function PrintSection({

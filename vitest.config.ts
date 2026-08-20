@@ -1,15 +1,16 @@
 import { defineConfig } from "vitest/config";
 import tsconfigPaths from "vite-tsconfig-paths";
+import react from "@vitejs/plugin-react";
 
 // إعداد اختبارات الوحدة (Vitest) — أمر البناء: npm test
 // التغطية تُقاس على منطق التطبيق (lib + data) عبر مزوّد v8.
 // بوابة الإلزام الدنيا حسب التعميم: 20% (تبدأ 8 فبراير 2026).
 export default defineConfig({
-  plugins: [tsconfigPaths()],
+  plugins: [tsconfigPaths(), react()],
   test: {
     environment: "jsdom",
     globals: true,
-    include: ["src/**/*.test.ts"],
+    include: ["src/**/*.test.{ts,tsx}"],
     coverage: {
       provider: "v8",
       // النطاق يطابق ما يقيسه الـ pipeline على المشروع كاملًا (لا مجلدات مختارة).
@@ -17,7 +18,7 @@ export default defineConfig({
       all: true,
       include: ["src/**/*.{ts,tsx}"],
       exclude: [
-        "**/*.test.ts",
+        "**/*.test.{ts,tsx}",
         "**/*.d.ts",
         "src/routeTree.gen.ts",
         "src/main.tsx",

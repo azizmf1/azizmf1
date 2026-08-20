@@ -5,14 +5,20 @@ import type { ReportStatus } from "@/data/lookups";
 
 export type Result = "fit" | "unfit" | null;
 export type ExamValue = "passed" | "failed";
+export type PassFail = "passed" | "failed";
+export type IdType = "citizen" | "resident" | "gcc" | "";
+// حالة مشاركة التقرير مع الجهات المختصة (MEWA) — OQ-01 (بوابة داخلية فقط)
+export type SharingStatus = "not_shared" | "pending" | "shared" | "failed";
 
 export interface Applicant {
-  name: string;
-  nationalId: string; // 10 أرقام
+  name: string; // الاسم الكامل بالعربية — من سجل الأحوال (BRS §6)
+  fullNameEn?: string; // الاسم الكامل بالإنجليزية — من السجل (BRS §6)
+  idType?: IdType; // نوع الهوية — BRS §6 (مواطن/مقيم/خليجي)
+  nationalId: string; // رقم الهوية (كان يُسمّى الهوية الوطنية)
   dob: string; // YYYY-MM-DD
-  gender: "male" | "female" | "";
-  nationality: string; // lookup value
-  phone: string; // 05XXXXXXXX
+  gender: "male" | "female" | ""; // من السجل (BRS §6)
+  nationality: string; // lookup value — من السجل
+  phone: string; // 05XXXXXXXX — حقل قديم (خارج BRS، محفوظ للتوافق)
   city: string; // lookup value
   bloodType: string;
 }
@@ -30,6 +36,23 @@ export interface ExamResult {
   note?: string;
 }
 
+// فحص حدّة الإبصار — BRS §6
+export interface VisualAcuity {
+  visionRight: PassFail; // نظر العين اليمنى (نجاح/رسوب)
+  visionLeft: PassFail; // نظر العين اليسرى
+  levelRight: string; // مستوى إبصار العين اليمنى (بدون تصحيح) — كود VISION_LEVELS
+  levelLeft: string; // مستوى إبصار العين اليسرى (بدون تصحيح)
+  correctedRight: string; // مستوى الإبصار مع التصحيح — يمين
+  correctedLeft: string; // مستوى الإبصار مع التصحيح — يسار
+  colorVision: PassFail; // عمى الألوان (سليم/مصاب)
+}
+
+// فحص الأهلية — BRS §6
+export interface Eligibility {
+  mentalHealth: PassFail; // الصحة النفسية
+  bodyHealth: PassFail; // صحة الجسد
+}
+
 export interface TimelineEntry {
   at: string; // ISO
   actorId: string;
@@ -39,13 +62,19 @@ export interface TimelineEntry {
 }
 
 export interface Report {
-  id: string; // HM-2026-XXXX
+  id: string; // HLR[YY][9-digit] e.g. HLR26000000001
   status: ReportStatus;
   applicant: Applicant;
-  licenseType: string; // lookup
-  vitals: Vitals;
-  exams: ExamResult[];
-  result: Result;
+  // ---- بنود الفحص وفق BRS §6 ----
+  visualAcuity?: VisualAcuity;
+  eligibility?: Eligibility;
+  result: Result; // النتيجة النهائية: fit=لائق / unfit=غير لائق
+  notFitJustification?: string; // مبرّر عدم اللياقة — إلزامي عند "غير لائق"
+  sharingStatus?: SharingStatus; // مشاركة الجهات المختصة (MEWA) — OQ-01
+  // ---- حقول قديمة (خارج BRS، محفوظة للتوافق — OQ-19) ----
+  licenseType: string; // legacy
+  vitals: Vitals; // legacy
+  exams: ExamResult[]; // legacy (بنود الفحص العامة السابقة)
   recommendation: string;
   auditNote?: string; // ملاحظة المدقّق عند الإعادة
   doctor: { id: string; name: string; org: string };
@@ -57,7 +86,9 @@ export interface Report {
   timeline: TimelineEntry[];
 }
 
-const KEY = "hms_reports";
+// النسخة v2: مخطط BRS §6 (حقول/رموز حالة جديدة). تغيير المفتاح يتجاهل أي بيانات
+// قديمة غير متوافقة في المتصفح ويعيد تحميل البذرة الجديدة تلقائيًا.
+const KEY = "hms_reports_v2";
 
 function isBrowser() {
   return typeof window !== "undefined" && !!window.localStorage;
@@ -66,6 +97,8 @@ function isBrowser() {
 function emptyApplicant(): Applicant {
   return {
     name: "",
+    fullNameEn: "",
+    idType: "",
     nationalId: "",
     dob: "",
     gender: "",
@@ -76,16 +109,35 @@ function emptyApplicant(): Applicant {
   };
 }
 
+export function emptyVisualAcuity(): VisualAcuity {
+  return {
+    visionRight: "passed",
+    visionLeft: "passed",
+    levelRight: "",
+    levelLeft: "",
+    correctedRight: "",
+    correctedLeft: "",
+    colorVision: "passed",
+  };
+}
+
+export function emptyEligibility(): Eligibility {
+  return { mentalHealth: "passed", bodyHealth: "passed" };
+}
+
 export function emptyReport(doctor: Report["doctor"]): Report {
   const now = new Date().toISOString();
   return {
     id: nextId(),
     status: "draft",
     applicant: emptyApplicant(),
+    visualAcuity: emptyVisualAcuity(),
+    eligibility: emptyEligibility(),
+    result: null,
+    notFitJustification: "",
     licenseType: "land",
     vitals: { height: "", weight: "", bloodPressure: "", pulse: "" },
     exams: [],
-    result: null,
     recommendation: "",
     doctor,
     createdAt: now,
@@ -94,17 +146,15 @@ export function emptyReport(doctor: Report["doctor"]): Report {
   };
 }
 
-let _seq = 0;
+// BR-CODE-FORMAT: HLR[YY][9-digit zero-padded sequential], never reset. e.g. HLR26000000043
 export function nextId(): string {
-  // معرّف زمني فريد بصيغة HM-2026-XXXX
-  _seq += 1;
+  const yy = String(new Date().getFullYear() % 100).padStart(2, "0");
   const all = listReports();
   const max = all.reduce((m, r) => {
-    const n = parseInt(r.id.split("-")[2] ?? "0", 10);
+    const n = parseInt(r.id.replace(/^HLR\d{2}/, ""), 10);
     return Number.isFinite(n) ? Math.max(m, n) : m;
   }, 0);
-  const next = Math.max(max + 1, 1000 + _seq);
-  return `HM-2026-${String(next).padStart(4, "0")}`;
+  return `HLR${yy}${String(max + 1).padStart(9, "0")}`;
 }
 
 function read(): Report[] {
@@ -151,6 +201,91 @@ export function appendTimeline(report: Report, entry: TimelineEntry): Report {
   return { ...report, timeline: [...report.timeline, entry] };
 }
 
+// ---------------------------------------------------------------- BR-UNIQUE-REPORT (§4)
+// لا يُسمح بأكثر من تقرير "ساري" أو "تحت الإجراء" لنفس المراجع، ما لم يكن
+// القائم "منتهيًا" أو نتيجته "غير لائق" (الإعفاء معتمد فقط بعد الاعتماد — PROVISIONAL OQ-09).
+const IN_PROGRESS_STATUSES: ReportStatus[] = [
+  "draft",
+  "pending_audit",
+  "requires_modification",
+];
+const VALID_DAYS = 360; // صلاحية التقرير المكتمل من تاريخ الاعتماد (§4)
+
+export interface UniquenessBlock {
+  kind: "valid" | "in_progress";
+  report: Report;
+}
+
+function daysSince(iso: string): number {
+  return (Date.now() - new Date(iso).getTime()) / 86_400_000;
+}
+
+/**
+ * يعيد التقرير المانع (إن وُجد) لنفس رقم الهوية، مع تجاهل التقرير الحالي.
+ * valid → MSG06، in_progress → MSG07.
+ */
+export function findUniquenessBlock(
+  idNumber: string,
+  excludeId?: string,
+): UniquenessBlock | null {
+  if (!idNumber) return null;
+  for (const r of read()) {
+    if (r.id === excludeId) continue;
+    if (r.applicant.nationalId !== idNumber) continue;
+    // إعفاءات: منتهي، أو مكتمل بنتيجة غير لائق (معتمد)
+    if (r.status === "expired") continue;
+    if (r.status === "completed" && r.result === "unfit") continue;
+    // تقرير ساري: مكتمل خلال 360 يومًا من الاعتماد
+    if (r.status === "completed") {
+      const base = r.decidedAt ?? r.updatedAt;
+      if (daysSince(base) <= VALID_DAYS) return { kind: "valid", report: r };
+      continue; // مكتمل قديم يُعامل كمنتهٍ فعليًا
+    }
+    // تقرير تحت الإجراء
+    if (IN_PROGRESS_STATUSES.includes(r.status))
+      return { kind: "in_progress", report: r };
+  }
+  return null;
+}
+
+/**
+ * BR08: عند إنشاء/إرسال تقرير جديد لمراجع لديه تقرير سابق "غير لائق" معتمد،
+ * يُنقل السابق إلى "منتهٍ" ضمن نفس العملية.
+ */
+export function expirePriorNotFit(idNumber: string, exceptId?: string) {
+  const all = read();
+  let changed = false;
+  for (const r of all) {
+    if (r.id === exceptId) continue;
+    if (r.applicant.nationalId !== idNumber) continue;
+    if (r.status === "completed" && r.result === "unfit") {
+      r.status = "expired";
+      changed = true;
+    }
+  }
+  if (changed) write(all);
+}
+
+// ---------------------------------------------------------------- الصلاحية (§4)
+// تقرير منتهي الصلاحية إن كانت حالته expired، أو مكتمل تجاوز 360 يومًا من الاعتماد.
+export function isReportExpired(r: Report): boolean {
+  if (r.status === "expired") return true;
+  if (r.status === "completed") {
+    const base = r.decidedAt ?? r.updatedAt;
+    return daysSince(base) > VALID_DAYS;
+  }
+  return false;
+}
+
+// تاريخ انتهاء صلاحية التقرير المكتمل (ISO)، أو null لغير المكتمل.
+export function validUntil(r: Report): string | null {
+  if (r.status !== "completed") return null;
+  const base = r.decidedAt ?? r.updatedAt;
+  const d = new Date(base);
+  d.setDate(d.getDate() + VALID_DAYS);
+  return d.toISOString();
+}
+
 // إعادة تهيئة البذرة (لزر "إعادة ضبط البيانات التجريبية")
 export function resetSeed() {
   write(SEED);
@@ -185,10 +320,10 @@ function exams(allPassed: boolean, failedKeys: string[] = []): ExamResult[] {
   }));
 }
 
-export const SEED: Report[] = [
+const RAW_SEED: Report[] = [
   {
-    id: "HM-2026-1001",
-    status: "approved",
+    id: "HLR26000000001",
+    status: "completed",
     applicant: {
       name: "عبدالله محمد الشهري",
       nationalId: "1098234571",
@@ -217,8 +352,8 @@ export const SEED: Report[] = [
     ],
   },
   {
-    id: "HM-2026-1002",
-    status: "submitted",
+    id: "HLR26000000002",
+    status: "pending_audit",
     applicant: {
       name: "فهد سعد القحطاني",
       nationalId: "1076551203",
@@ -244,8 +379,8 @@ export const SEED: Report[] = [
     ],
   },
   {
-    id: "HM-2026-1003",
-    status: "returned",
+    id: "HLR26000000003",
+    status: "requires_modification",
     applicant: {
       name: "ريم خالد الدوسري",
       nationalId: "1099887766",
@@ -275,7 +410,7 @@ export const SEED: Report[] = [
     ],
   },
   {
-    id: "HM-2026-1004",
+    id: "HLR26000000004",
     status: "draft",
     applicant: {
       name: "سلطان ناصر العنزي",
@@ -300,8 +435,8 @@ export const SEED: Report[] = [
     ],
   },
   {
-    id: "HM-2026-1005",
-    status: "approved",
+    id: "HLR26000000005",
+    status: "completed",
     applicant: {
       name: "ماجد علي الغامدي",
       nationalId: "1011223344",
@@ -330,8 +465,8 @@ export const SEED: Report[] = [
     ],
   },
   {
-    id: "HM-2026-1006",
-    status: "submitted",
+    id: "HLR26000000006",
+    status: "pending_audit",
     applicant: {
       name: "هند فيصل المالكي",
       nationalId: "1066778899",
@@ -357,8 +492,8 @@ export const SEED: Report[] = [
     ],
   },
   {
-    id: "HM-2026-1007",
-    status: "under_review",
+    id: "HLR26000000007",
+    status: "pending_audit",
     applicant: {
       name: "تركي بندر الحربي",
       nationalId: "1033445566",
@@ -386,8 +521,8 @@ export const SEED: Report[] = [
     ],
   },
   {
-    id: "HM-2026-1008",
-    status: "approved",
+    id: "HLR26000000008",
+    status: "expired",
     applicant: {
       name: "نواف عبدالعزيز السبيعي",
       nationalId: "1088990011",
@@ -416,7 +551,7 @@ export const SEED: Report[] = [
     ],
   },
   {
-    id: "HM-2026-1009",
+    id: "HLR26000000009",
     status: "draft",
     applicant: {
       name: "بدر صالح المطيري",
@@ -441,8 +576,8 @@ export const SEED: Report[] = [
     ],
   },
   {
-    id: "HM-2026-1010",
-    status: "returned",
+    id: "HLR26000000010",
+    status: "requires_modification",
     applicant: {
       name: "العنود ماجد الشمري",
       nationalId: "1077665544",
@@ -472,8 +607,8 @@ export const SEED: Report[] = [
     ],
   },
   {
-    id: "HM-2026-1011",
-    status: "approved",
+    id: "HLR26000000011",
+    status: "completed",
     applicant: {
       name: "يوسف إبراهيم الدخيل",
       nationalId: "1022334455",
@@ -502,8 +637,8 @@ export const SEED: Report[] = [
     ],
   },
   {
-    id: "HM-2026-1012",
-    status: "submitted",
+    id: "HLR26000000012",
+    status: "pending_audit",
     applicant: {
       name: "منيرة سعود الرشيد",
       nationalId: "1099001122",
@@ -529,3 +664,41 @@ export const SEED: Report[] = [
     ],
   },
 ];
+
+// يشتق حقول BRS §6 (حدّة الإبصار/الأهلية) من بنود الفحص القديمة، لتظهر بيانات
+// متسقة في العرض والطباعة دون إعادة كتابة كل عنصر بذرة يدويًا.
+function withBrsDefaults(r: Report): Report {
+  const examVal = (k: string): PassFail =>
+    r.exams.find((e) => e.key === k)?.value === "failed" ? "failed" : "passed";
+  const vision = examVal("vision");
+  const bodyFailed = ["hearing", "motor", "cardio", "respiratory", "neuro"].some(
+    (k) => examVal(k) === "failed",
+  );
+  const mentalFailed =
+    examVal("psych") === "failed" || examVal("substance") === "failed";
+  return {
+    ...r,
+    applicant: {
+      ...r.applicant,
+      idType: r.applicant.idType ?? "citizen",
+      fullNameEn: r.applicant.fullNameEn ?? "",
+    },
+    visualAcuity: r.visualAcuity ?? {
+      visionRight: vision,
+      visionLeft: vision,
+      levelRight: vision === "failed" ? "4" : "1",
+      levelLeft: vision === "failed" ? "4" : "1",
+      correctedRight: "1",
+      correctedLeft: "1",
+      colorVision: "passed",
+    },
+    eligibility: r.eligibility ?? {
+      mentalHealth: mentalFailed ? "failed" : "passed",
+      bodyHealth: bodyFailed ? "failed" : "passed",
+    },
+    notFitJustification:
+      r.notFitJustification ?? (r.result === "unfit" ? r.recommendation : ""),
+  };
+}
+
+export const SEED: Report[] = RAW_SEED.map(withBrsDefaults);

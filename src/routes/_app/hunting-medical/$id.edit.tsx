@@ -32,13 +32,12 @@ function EditReportPage() {
         title="تعديل التقرير الطبي"
         subtitle={report.applicant.name}
         breadcrumb={[
-          { label: "الرئيسية", to: "/dashboard" },
           { label: "التقارير الطبية", to: "/hunting-medical" },
           { label: report.id },
           { label: "تعديل" },
         ]}
       />
-      <ReportForm initial={report} mode="edit" user={user} />
+      <ReportForm initial={report} mode="edit" user={user} lockApplicant />
     </div>
   );
 }

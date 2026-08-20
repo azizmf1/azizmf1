@@ -5,7 +5,7 @@ import {
   Check,
   Clock,
   Droplet,
-  Heart,
+  Eye,
   Pencil,
   Printer,
   Send,
@@ -24,22 +24,35 @@ import { NotFound } from "@/components/hms/States";
 import { toast } from "@/components/hms/Toast";
 import {
   appendTimeline,
+  emptyEligibility,
+  emptyVisualAcuity,
   getReport,
+  isReportExpired,
   saveReport,
+  validUntil,
+  type PassFail,
   type Report,
 } from "@/data/reports";
 import {
   CITIES,
   EXAM_ITEMS,
   GENDERS,
-  LICENSE_TYPES,
+  ID_TYPES,
   NATIONALITIES,
+  VISION_LEVELS,
   lookupLabel,
 } from "@/data/lookups";
-import { age, fmtDateTime } from "@/lib/format";
+import { age, fmtDate, fmtDateTime } from "@/lib/format";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { can } from "@/lib/permissions";
 import { msg } from "@/data/messages";
+
+const SHARING_LABEL: Record<string, string> = {
+  not_shared: "غير مُشاركة",
+  pending: "قيد الإرسال",
+  shared: "تمت المشاركة",
+  failed: "تعذّرت المشاركة",
+};
 
 export const Route = createFileRoute("/_app/hunting-medical/$id")({
   component: ReportViewPage,
@@ -61,7 +74,7 @@ function ReportViewPage() {
   const submit = () => {
     const now = new Date().toISOString();
     const next = appendTimeline(
-      { ...report, status: "submitted", submittedAt: now, updatedAt: now },
+      { ...report, status: "pending_audit", submittedAt: now, updatedAt: now },
       {
         at: now,
         actorId: user.id,
@@ -84,22 +97,26 @@ function ReportViewPage() {
     <div>
       <PageHeader
         title={report.applicant.name}
-        subtitle={`${report.id} · ${lookupLabel(LICENSE_TYPES, report.licenseType)}`}
+        subtitle={report.id}
         breadcrumb={[
-          { label: "الرئيسية", to: "/dashboard" },
           { label: "التقارير الطبية", to: "/hunting-medical" },
           { label: report.id },
         ]}
         action={
           <div className="flex flex-wrap items-center gap-2">
-            <Link
-              to="/hunting-medical/$id/print"
-              params={{ id: report.id }}
-            >
-              <Button variant="secondary" icon={<Printer className="size-4" />}>
-                طباعة
-              </Button>
-            </Link>
+            {report.status === "completed" && !isReportExpired(report) && (
+              <Link
+                to="/hunting-medical/$id/print"
+                params={{ id: report.id }}
+              >
+                <Button
+                  variant="secondary"
+                  icon={<Printer className="size-4" />}
+                >
+                  طباعة
+                </Button>
+              </Link>
+            )}
             {can(user, "report:edit", report) && (
               <Link to="/hunting-medical/$id/edit" params={{ id: report.id }}>
                 <Button variant="secondary" icon={<Pencil className="size-4" />}>
@@ -127,7 +144,23 @@ function ReportViewPage() {
       <div className="grid gap-6 p-4 lg:grid-cols-[1fr_320px] lg:p-10">
         {/* المحتوى */}
         <div className="space-y-6">
-          {report.status === "returned" && report.auditNote && (
+          {/* UC05 — بانر الصلاحية (§4) */}
+          {isReportExpired(report) ? (
+            <div className="rounded-[var(--r-lg)] border border-[var(--err-100)] bg-[var(--err-50)] p-4 text-[13px] font-semibold text-[var(--err-700)]">
+              انتهت صلاحية هذا التقرير — غير قابل للطباعة أو التعديل أو التدقيق.
+            </div>
+          ) : (
+            report.status === "completed" &&
+            validUntil(report) && (
+              <div className="rounded-[var(--r-lg)] border border-[var(--ok-100)] bg-[var(--ok-50)] p-4 text-[13px] font-semibold text-[var(--ok-700)]">
+                تقرير ساري الصلاحية حتى{" "}
+                <span className="num">{fmtDate(validUntil(report)!)}</span> (360
+                يومًا من الاعتماد).
+              </div>
+            )
+          )}
+
+          {report.status === "requires_modification" && report.auditNote && (
             <div className="rounded-[var(--r-lg)] border border-[var(--err-100)] bg-[var(--err-50)] p-4">
               <div className="text-[13px] font-bold text-[var(--err-700)]">
                 مُعاد للتعديل — ملاحظة المدقّق
@@ -143,8 +176,17 @@ function ReportViewPage() {
             icon={<UserRound className="size-4" />}
           >
             <dl className="grid gap-x-6 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
-              <Info label="الاسم" value={report.applicant.name} />
+              <Info
+                label="نوع الهوية"
+                value={lookupLabel(ID_TYPES, report.applicant.idType ?? "")}
+              />
               <Info label="رقم الهوية" value={report.applicant.nationalId} ltr />
+              <Info label="الاسم (عربي)" value={report.applicant.name} />
+              <Info
+                label="الاسم (إنجليزي)"
+                value={report.applicant.fullNameEn || "—"}
+                ltr
+              />
               <Info label="العمر" value={age(report.applicant.dob)} />
               <Info
                 label="الجنس"
@@ -158,90 +200,126 @@ function ReportViewPage() {
                 label="المدينة"
                 value={lookupLabel(CITIES, report.applicant.city)}
               />
-              <Info label="الجوال" value={report.applicant.phone} ltr />
               <Info
                 label="فصيلة الدم"
                 value={report.applicant.bloodType || "—"}
                 ltr
                 icon={<Droplet className="size-4 text-[var(--err-600)]" />}
               />
-              <Info
-                label="نوع الرخصة"
-                value={lookupLabel(LICENSE_TYPES, report.licenseType)}
-              />
             </dl>
           </ReportSection>
 
           <ReportSection
-            title="العلامات الحيوية"
-            icon={<Heart className="size-4" />}
+            title="فحص حدّة الإبصار"
+            icon={<Eye className="size-4" />}
           >
-            <dl className="grid gap-x-6 gap-y-4 sm:grid-cols-2 lg:grid-cols-4">
-              <Info label="الطول" value={vital(report.vitals.height, "سم")} ltr />
-              <Info label="الوزن" value={vital(report.vitals.weight, "كجم")} ltr />
-              <Info
-                label="ضغط الدم"
-                value={report.vitals.bloodPressure || "—"}
-                ltr
-              />
-              <Info
-                label="النبض"
-                value={vital(report.vitals.pulse, "نبضة/د")}
-                ltr
-              />
-            </dl>
+            {(() => {
+              const v = report.visualAcuity ?? emptyVisualAcuity();
+              return (
+                <dl className="grid gap-x-6 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
+                  <PfInfo label="نظر العين اليمنى" value={v.visionRight} />
+                  <PfInfo label="نظر العين اليسرى" value={v.visionLeft} />
+                  <PfInfo label="عمى الألوان" value={v.colorVision} okAr="سليم" noAr="مصاب" />
+                  <Info
+                    label="مستوى الإبصار — يمين"
+                    value={lookupLabel(VISION_LEVELS, v.levelRight)}
+                  />
+                  <Info
+                    label="مستوى الإبصار — يسار"
+                    value={lookupLabel(VISION_LEVELS, v.levelLeft)}
+                  />
+                  <span className="hidden lg:block" />
+                  <Info
+                    label="مع التصحيح — يمين"
+                    value={lookupLabel(VISION_LEVELS, v.correctedRight)}
+                  />
+                  <Info
+                    label="مع التصحيح — يسار"
+                    value={lookupLabel(VISION_LEVELS, v.correctedLeft)}
+                  />
+                </dl>
+              );
+            })()}
           </ReportSection>
 
           <ReportSection
-            title="بنود الفحص الطبي"
+            title="فحص الأهلية"
             icon={<Stethoscope className="size-4" />}
           >
-            <ul className="grid gap-2 sm:grid-cols-2">
-              {report.exams.map((ex) => {
-                const def = EXAM_ITEMS.find((x) => x.key === ex.key);
-                const ok = ex.value === "passed";
-                return (
-                  <li
-                    key={ex.key}
-                    className="flex items-center justify-between rounded-[var(--r-md)] border border-[var(--ink-20)] px-3 py-2.5"
-                  >
-                    <span className="text-[13px] text-[var(--ink-80)]">
-                      {def?.label ?? ex.key}
-                    </span>
-                    <span
-                      className={`inline-flex items-center gap-1 text-[12px] font-semibold ${
-                        ok ? "text-[var(--ok-700)]" : "text-[var(--err-700)]"
-                      }`}
-                    >
-                      {ok ? (
-                        <Check className="size-3.5" />
-                      ) : (
-                        <X className="size-3.5" />
-                      )}
-                      {ok ? "سليم" : "غير سليم"}
-                    </span>
-                  </li>
-                );
-              })}
-              {report.exams.length === 0 && (
-                <li className="text-[13px] text-[var(--ink-60)]">
-                  لم تُسجّل بنود الفحص بعد.
-                </li>
-              )}
-            </ul>
+            {(() => {
+              const el = report.eligibility ?? emptyEligibility();
+              return (
+                <dl className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
+                  <PfInfo label="الصحة النفسية" value={el.mentalHealth} />
+                  <PfInfo label="صحة الجسد" value={el.bodyHealth} />
+                </dl>
+              );
+            })()}
           </ReportSection>
 
           <ReportSection
-            title="النتيجة والتوصية"
+            title="النتيجة النهائية"
             icon={<Activity className="size-4" />}
           >
             <div className="flex flex-wrap items-center gap-3">
               <ResultBadge result={report.result} size="lg" />
             </div>
-            <p className="mt-4 whitespace-pre-wrap text-[14px] leading-7 text-[var(--ink-80)]">
-              {report.recommendation || "لا توجد توصية مسجّلة."}
-            </p>
+            {report.result === "unfit" && (
+              <div className="mt-4">
+                <div className="text-[12px] text-[var(--ink-50)]">
+                  مبرّر عدم اللياقة
+                </div>
+                <p className="mt-1 whitespace-pre-wrap text-[14px] leading-7 text-[var(--ink-80)]">
+                  {report.notFitJustification || "—"}
+                </p>
+              </div>
+            )}
           </ReportSection>
+
+          {/* OQ-19 — بيانات قديمة (خارج BRS)، للقراءة فقط، على شاشة العرض فقط */}
+          {(report.exams.length > 0 ||
+            report.vitals.height ||
+            report.vitals.weight ||
+            report.vitals.bloodPressure ||
+            report.vitals.pulse) && (
+            <details className="rounded-[var(--r-lg)] border border-[var(--ink-20)] bg-[var(--ink-10)]/40 p-4">
+              <summary className="cursor-pointer text-[13px] font-semibold text-[var(--ink-70)]">
+                بيانات قديمة (خارج المتطلبات — للاطلاع فقط)
+              </summary>
+              <div className="mt-3 space-y-3">
+                <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2 lg:grid-cols-4">
+                  <Info label="الطول" value={report.vitals.height ? `${report.vitals.height} سم` : "—"} ltr />
+                  <Info label="الوزن" value={report.vitals.weight ? `${report.vitals.weight} كجم` : "—"} ltr />
+                  <Info label="ضغط الدم" value={report.vitals.bloodPressure || "—"} ltr />
+                  <Info label="النبض" value={report.vitals.pulse || "—"} ltr />
+                </dl>
+                {report.exams.length > 0 && (
+                  <ul className="grid gap-1.5 sm:grid-cols-2">
+                    {report.exams.map((ex) => (
+                      <li
+                        key={ex.key}
+                        className="flex items-center justify-between text-[12px] text-[var(--ink-70)]"
+                      >
+                        <span>
+                          {EXAM_ITEMS.find((x) => x.key === ex.key)?.label ??
+                            ex.key}
+                        </span>
+                        <span
+                          className={
+                            ex.value === "passed"
+                              ? "text-[var(--ok-700)]"
+                              : "text-[var(--err-700)]"
+                          }
+                        >
+                          {ex.value === "passed" ? "سليم" : "غير سليم"}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </details>
+          )}
         </div>
 
         {/* الجانب: الحالة + Timeline */}
@@ -263,6 +341,12 @@ function ReportViewPage() {
                 <Row label="المنشأة" value={report.doctor.org} />
                 {report.auditor && (
                   <Row label="المدقّق" value={report.auditor.name} />
+                )}
+                {report.status === "completed" && report.sharingStatus && (
+                  <Row
+                    label="مشاركة الجهات المختصة"
+                    value={SHARING_LABEL[report.sharingStatus]}
+                  />
                 )}
                 <Row label="آخر تحديث" value={fmtDateTime(report.updatedAt)} ltr />
               </div>
@@ -328,8 +412,31 @@ function ReportViewPage() {
   );
 }
 
-function vital(v: string, unit: string) {
-  return v ? `${v} ${unit}` : "—";
+function PfInfo({
+  label,
+  value,
+  okAr = "سليم",
+  noAr = "غير سليم",
+}: {
+  label: string;
+  value: PassFail;
+  okAr?: string;
+  noAr?: string;
+}) {
+  const ok = value === "passed";
+  return (
+    <div>
+      <dt className="text-[12px] text-[var(--ink-50)]">{label}</dt>
+      <dd
+        className={`mt-0.5 inline-flex items-center gap-1 text-[14px] font-semibold ${
+          ok ? "text-[var(--ok-700)]" : "text-[var(--err-700)]"
+        }`}
+      >
+        {ok ? <Check className="size-3.5" /> : <X className="size-3.5" />}
+        {ok ? okAr : noAr}
+      </dd>
+    </div>
+  );
 }
 
 function Info({

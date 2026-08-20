@@ -7,15 +7,15 @@
    ========================================================================= */
 
 :root {
-  /* Brand — صحة teal/green ramp (10 → 100, light → dark) */
-  --brand-10: #e7f5f1;
-  --brand-20: #c7e8df;
-  --brand-50: #2ba89b;
-  --brand-60: #1b9183;
-  --brand-70: #16796d;
-  --brand-80: #126358;
-  --brand-90: #0e4d45;
-  --brand-100: #0a3b35;
+  /* Brand — هوية صحة (أزرق) ramp (10 → 100, light → dark) */
+  --brand-10: #eaf2fb;
+  --brand-20: #cbdff4;
+  --brand-50: #4c8ad1;
+  --brand-60: #3679c2;
+  --brand-70: #2c6bb2;
+  --brand-80: #245c97;
+  --brand-90: #1f4e82;
+  --brand-100: #163a63;
 
   /* Ink — neutral gray ramp (Carbon Gray) */
   --ink-10: #f4f5f6;

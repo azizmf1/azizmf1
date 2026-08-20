@@ -1,32 +1,65 @@
 // قوائم مرجعية ثابتة (Lookups) — كلها mock، لا باكند.
+// القوائم المضافة لـ BRS §6 تُقرأ من المصدر الموحّد shared/lookups.json.
+import lookupsJson from "../../shared/lookups.json";
 
+type BiCode = { code: string; ar: string; en: string };
+const toOptions = (arr: BiCode[]) =>
+  arr.map((x) => ({ value: x.code, label: x.ar }));
+
+// حالات التقرير — BRS §3 (رموز + AR/EN).
 export type ReportStatus =
   | "draft"
-  | "submitted"
-  | "under_review"
-  | "approved"
-  | "returned";
+  | "pending_audit"
+  | "completed"
+  | "requires_modification"
+  | "expired";
 
 export const STATUSES: Record<
   ReportStatus,
-  { ar: string; tone: "gray" | "amber" | "orange" | "green" | "red" | "neutral" }
+  {
+    ar: string;
+    en: string;
+    tone: "gray" | "amber" | "orange" | "green" | "red" | "neutral";
+  }
 > = {
-  draft: { ar: "مسودة", tone: "gray" },
-  submitted: { ar: "بانتظار التدقيق", tone: "amber" },
-  under_review: { ar: "قيد التدقيق", tone: "orange" },
-  approved: { ar: "معتمد", tone: "green" },
-  returned: { ar: "مُعاد للتعديل", tone: "red" },
+  draft: { ar: "مسودة", en: "Draft", tone: "gray" },
+  pending_audit: { ar: "بانتظار التدقيق", en: "Pending for Auditing", tone: "amber" },
+  completed: { ar: "مكتمل", en: "Completed", tone: "green" },
+  requires_modification: {
+    ar: "معاد إلى المدخل",
+    en: "Requires Modification",
+    tone: "red",
+  },
+  expired: { ar: "منتهي", en: "Expired", tone: "gray" },
 };
 
 export const STATUS_ORDER: ReportStatus[] = [
   "draft",
-  "submitted",
-  "under_review",
-  "returned",
-  "approved",
+  "pending_audit",
+  "requires_modification",
+  "completed",
+  "expired",
 ];
 
 export const BLOOD_TYPES = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"];
+
+export const BLOOD_TYPE_OPTIONS: { value: string; label: string }[] =
+  BLOOD_TYPES.map((b) => ({ value: b, label: b }));
+
+// أنواع الهوية — BRS §6 / OQ-04 (مواطن/مقيم/خليجي).
+export const ID_TYPES: { value: string; label: string }[] = toOptions(
+  lookupsJson.idTypes as BiCode[],
+);
+
+// مستويات حدّة الإبصار — BRS §6 / OQ-03 (تخدم بدون تصحيح ومع التصحيح).
+export const VISION_LEVELS: { value: string; label: string }[] = toOptions(
+  lookupsJson.visionLevels.values as BiCode[],
+);
+
+// النتيجة النهائية — BRS §6 (لائق/غير لائق).
+export const FINAL_RESULTS: { value: string; label: string }[] = toOptions(
+  lookupsJson.finalResult as BiCode[],
+);
 
 export const GENDERS: { value: string; label: string }[] = [
   { value: "male", label: "ذكر" },

@@ -39,24 +39,23 @@ export function can(
   if (resource) {
     switch (action) {
       case "report:edit":
-        // التعديل ممكن فقط على المسودة أو المُعاد، ومن الطبيب صاحب التقرير
+        // UC06: التعديل على المسودة أو المُعاد إلى المدخل فقط، من الطبيب
         return (
           user.role === "doctor" &&
-          (resource.status === "draft" || resource.status === "returned")
+          (resource.status === "draft" ||
+            resource.status === "requires_modification")
         );
       case "report:submit":
         return (
           user.role === "doctor" &&
-          (resource.status === "draft" || resource.status === "returned")
+          (resource.status === "draft" ||
+            resource.status === "requires_modification")
         );
       case "report:delete":
         return user.role === "doctor" && resource.status === "draft";
       case "report:audit":
-        return (
-          user.role === "auditor" &&
-          (resource.status === "submitted" ||
-            resource.status === "under_review")
-        );
+        // UC04: التدقيق على "بانتظار التدقيق" فقط
+        return user.role === "auditor" && resource.status === "pending_audit";
       default:
         return true;
     }

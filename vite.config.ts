@@ -7,6 +7,8 @@ import tailwindcss from "@tailwindcss/vite";
 // تطبيق SPA ثابت: TanStack Router (file-based) + React + Tailwind + Vite.
 // المخرجات في dist/ — يُقدَّم كموقع ثابت على أي مستضيف.
 export default defineConfig({
+  // قاعدة النشر: الجذر افتراضيًا، وتحت مسار فرعي على GitHub Pages (VITE_BASE).
+  base: process.env.VITE_BASE || "/",
   server: {
     port: 3000,
     host: true,

@@ -7,10 +7,13 @@ import {
 } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import {
+  Check,
   CheckCircle2,
+  Eye,
   RotateCcw,
   Stethoscope,
   UserRound,
+  X,
 } from "lucide-react";
 import { PageHeader } from "@/components/hms/Shell";
 import { Card, CardBody, CardHeader } from "@/components/hms/Card";
@@ -22,18 +25,18 @@ import { NotFound } from "@/components/hms/States";
 import { toast } from "@/components/hms/Toast";
 import {
   appendTimeline,
+  emptyEligibility,
+  emptyVisualAcuity,
   getReport,
   saveReport,
+  type PassFail,
   type Report,
 } from "@/data/reports";
-import {
-  EXAM_ITEMS,
-  LICENSE_TYPES,
-  lookupLabel,
-} from "@/data/lookups";
+import { ID_TYPES, VISION_LEVELS, lookupLabel } from "@/data/lookups";
+import { enqueueApprovedReport } from "@/data/reportSharing";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { can } from "@/lib/permissions";
-import { msg } from "@/data/messages";
+import { brsMsg } from "@/data/brsMessages";
 
 export const Route = createFileRoute("/_app/hunting-medical/$id/audit")({
   component: AuditPage,
@@ -60,7 +63,7 @@ function AuditPage() {
 
   const decide = (decision: "approve" | "return") => {
     if (decision === "return" && !note.trim()) {
-      setNoteErr("ملاحظة الإعادة إلزامية.");
+      setNoteErr(brsMsg("MSG11")); // ملاحظة الإعادة إلزامية
       setDialog(null);
       return;
     }
@@ -71,31 +74,43 @@ function AuditPage() {
       decidedAt: now,
       updatedAt: now,
     };
-    const next =
-      decision === "approve"
-        ? appendTimeline(
-            { ...base, status: "approved" },
-            {
-              at: now,
-              actorId: user.id,
-              actorName: user.name,
-              action: "اعتماد التقرير",
-              note: note.trim() || undefined,
-            },
-          )
-        : appendTimeline(
-            { ...base, status: "returned", auditNote: note.trim() },
-            {
-              at: now,
-              actorId: user.id,
-              actorName: user.name,
-              action: "إعادة للتعديل",
-              note: note.trim(),
-            },
-          );
+    let next: Report;
+    if (decision === "approve") {
+      // UC04: الحالة = مكتمل + مشاركة الجهات المختصة (MEWA — OQ-01) عبر صندوق الصادر.
+      // الاعتماد يكتمل بغضّ النظر عن نتيجة المشاركة.
+      const completed: Report = { ...base, status: "completed" };
+      const sharing = enqueueApprovedReport(completed);
+      next = appendTimeline(
+        { ...completed, sharingStatus: sharing },
+        {
+          at: now,
+          actorId: user.id,
+          actorName: user.name,
+          action: "اعتماد التقرير",
+          note: note.trim() || undefined,
+        },
+      );
+      next = appendTimeline(next, {
+        at: now,
+        actorId: user.id,
+        actorName: user.name,
+        action: "إرسال التقرير للجهات المختصة (قيد الإرسال)",
+      });
+    } else {
+      next = appendTimeline(
+        { ...base, status: "requires_modification", auditNote: note.trim() },
+        {
+          at: now,
+          actorId: user.id,
+          actorName: user.name,
+          action: "إعادة للتعديل",
+          note: note.trim(),
+        },
+      );
+    }
     saveReport(next);
     setDialog(null);
-    toast.success(decision === "approve" ? msg("MSG08") : msg("MSG09"));
+    toast.success(brsMsg("MSG00"));
     navigate({ to: "/hunting-medical/$id", params: { id } });
   };
 
@@ -105,7 +120,6 @@ function AuditPage() {
         title="تدقيق التقرير الطبي"
         subtitle={`${report.id} · ${report.applicant.name}`}
         breadcrumb={[
-          { label: "الرئيسية", to: "/dashboard" },
           { label: "التقارير الطبية", to: "/hunting-medical" },
           { label: report.id, to: undefined },
           { label: "تدقيق" },
@@ -123,53 +137,88 @@ function AuditPage() {
             />
             <CardBody>
               <dl className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
-                <Item label="الاسم" value={report.applicant.name} />
-                <Item label="رقم الهوية" value={report.applicant.nationalId} ltr />
                 <Item
-                  label="نوع الرخصة"
-                  value={lookupLabel(LICENSE_TYPES, report.licenseType)}
+                  label="نوع الهوية"
+                  value={lookupLabel(ID_TYPES, report.applicant.idType ?? "")}
                 />
-                <Item label="الجوال" value={report.applicant.phone} ltr />
+                <Item label="رقم الهوية" value={report.applicant.nationalId} ltr />
+                <Item label="الاسم (عربي)" value={report.applicant.name} />
+                <Item
+                  label="الاسم (إنجليزي)"
+                  value={report.applicant.fullNameEn || "—"}
+                  ltr
+                />
               </dl>
             </CardBody>
           </Card>
 
           <Card>
             <CardHeader
-              title="نتائج الفحص"
+              title="فحص حدّة الإبصار"
+              icon={<Eye className="size-5" />}
+            />
+            <CardBody>
+              {(() => {
+                const v = report.visualAcuity ?? emptyVisualAcuity();
+                return (
+                  <dl className="grid gap-x-6 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
+                    <Pf label="نظر العين اليمنى" value={v.visionRight} />
+                    <Pf label="نظر العين اليسرى" value={v.visionLeft} />
+                    <Pf label="عمى الألوان" value={v.colorVision} okAr="سليم" noAr="مصاب" />
+                    <Item
+                      label="مستوى الإبصار — يمين"
+                      value={lookupLabel(VISION_LEVELS, v.levelRight)}
+                    />
+                    <Item
+                      label="مستوى الإبصار — يسار"
+                      value={lookupLabel(VISION_LEVELS, v.levelLeft)}
+                    />
+                    <span className="hidden lg:block" />
+                    <Item
+                      label="مع التصحيح — يمين"
+                      value={lookupLabel(VISION_LEVELS, v.correctedRight)}
+                    />
+                    <Item
+                      label="مع التصحيح — يسار"
+                      value={lookupLabel(VISION_LEVELS, v.correctedLeft)}
+                    />
+                  </dl>
+                );
+              })()}
+            </CardBody>
+          </Card>
+
+          <Card>
+            <CardHeader
+              title="فحص الأهلية والنتيجة"
               icon={<Stethoscope className="size-5" />}
               action={<ResultBadge result={report.result} />}
             />
             <CardBody>
-              <ul className="grid gap-2 sm:grid-cols-2">
-                {report.exams.map((ex) => {
-                  const def = EXAM_ITEMS.find((x) => x.key === ex.key);
-                  const ok = ex.value === "passed";
-                  return (
-                    <li
-                      key={ex.key}
-                      className="flex items-center justify-between rounded-[var(--r-md)] border border-[var(--ink-20)] px-3 py-2"
-                    >
-                      <span className="text-[13px] text-[var(--ink-80)]">
-                        {def?.label ?? ex.key}
-                      </span>
-                      <span
-                        className={`text-[12px] font-semibold ${
-                          ok ? "text-[var(--ok-700)]" : "text-[var(--err-700)]"
-                        }`}
-                      >
-                        {ok ? "سليم" : "غير سليم"}
-                      </span>
-                    </li>
-                  );
-                })}
-              </ul>
-              <div className="mt-4 rounded-[var(--r-md)] bg-[var(--ink-10)] p-3">
-                <div className="text-[12px] text-[var(--ink-50)]">التوصية</div>
-                <p className="mt-1 whitespace-pre-wrap text-[14px] leading-7 text-[var(--ink-80)]">
-                  {report.recommendation || "—"}
-                </p>
-              </div>
+              {(() => {
+                const el = report.eligibility ?? emptyEligibility();
+                return (
+                  <dl className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
+                    <Pf label="الصحة النفسية" value={el.mentalHealth} />
+                    <Pf label="صحة الجسد" value={el.bodyHealth} />
+                    <Item
+                      label="فصيلة الدم"
+                      value={report.applicant.bloodType || "—"}
+                      ltr
+                    />
+                  </dl>
+                );
+              })()}
+              {report.result === "unfit" && (
+                <div className="mt-4 rounded-[var(--r-md)] bg-[var(--ink-10)] p-3">
+                  <div className="text-[12px] text-[var(--ink-50)]">
+                    مبرّر عدم اللياقة
+                  </div>
+                  <p className="mt-1 whitespace-pre-wrap text-[14px] leading-7 text-[var(--ink-80)]">
+                    {report.notFitJustification || "—"}
+                  </p>
+                </div>
+              )}
               <Link
                 to="/hunting-medical/$id"
                 params={{ id: report.id }}
@@ -217,7 +266,7 @@ function AuditPage() {
                   icon={<RotateCcw className="size-4" />}
                   onClick={() => {
                     if (!note.trim()) {
-                      setNoteErr("ملاحظة الإعادة إلزامية.");
+                      setNoteErr(brsMsg("MSG11"));
                       return;
                     }
                     setDialog("return");
@@ -235,7 +284,7 @@ function AuditPage() {
         open={dialog === "approve"}
         onClose={() => setDialog(null)}
         title="اعتماد التقرير"
-        description="سيتم اعتماد التقرير نهائيًا وإتاحته للطباعة. هل تريد المتابعة؟"
+        description={report.result === "unfit" ? brsMsg("MSG18") : brsMsg("MSG17")}
         tone="success"
         footer={
           <>
@@ -265,6 +314,33 @@ function AuditPage() {
           </>
         }
       />
+    </div>
+  );
+}
+
+function Pf({
+  label,
+  value,
+  okAr = "سليم",
+  noAr = "غير سليم",
+}: {
+  label: string;
+  value: PassFail;
+  okAr?: string;
+  noAr?: string;
+}) {
+  const ok = value === "passed";
+  return (
+    <div>
+      <dt className="text-[12px] text-[var(--ink-50)]">{label}</dt>
+      <dd
+        className={`mt-0.5 inline-flex items-center gap-1 text-[14px] font-semibold ${
+          ok ? "text-[var(--ok-700)]" : "text-[var(--err-700)]"
+        }`}
+      >
+        {ok ? <Check className="size-3.5" /> : <X className="size-3.5" />}
+        {ok ? okAr : noAr}
+      </dd>
     </div>
   );
 }

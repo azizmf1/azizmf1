@@ -1,0 +1,63 @@
+{
+  "$comment": "BRS v1.0 §9 message catalogue — SINGLE SOURCE OF TRUTH. Bilingual by ID. Per BA (OQ-17) the API returns message IDs; the front-end resolves display text from this file. Do not hard-code these strings in components. MSG07 interpolates {status} (the report's status label).",
+  "version": 1,
+  "messages": {
+    "MSG00": {
+      "ar": "تمت العملية بنجاح!",
+      "en": "Successfully Done!"
+    },
+    "MSG01": {
+      "ar": "لا يوجد تقارير طبية.",
+      "en": "No medical reports found."
+    },
+    "MSG02": {
+      "ar": "لا يوجد نتائج مطابقة.",
+      "en": "No matching result found."
+    },
+    "MSG03": {
+      "ar": "سيقوم النظام بالعودة للقائمة الرئيسية بدون حفظ أي عملية، هل أنت متأكد؟",
+      "en": "System will redirect you to main page without saving, Are you sure?"
+    },
+    "MSG04": {
+      "ar": "عذراً! حدث خطأ أثناء الاستعلام عن بيانات المراجع، الرجاء التأكد من البيانات المدخلة أو المحاولة لاحقاً.",
+      "en": "Sorry! An error occurred while retrieving applicant information, please recheck the entered info or try again later."
+    },
+    "MSG05": {
+      "ar": "الرجاء تعبئة الحقول اللازمة!",
+      "en": "Please enter the required fields!"
+    },
+    "MSG06": {
+      "ar": "يوجد تقرير طبي ساري الصلاحية للمراجع، علماً أن صلاحية التقرير هي 360 يوم من تاريخ الاعتماد",
+      "en": "A valid medical report exists for the applicant, note that it is valid for 360 days since the date it was approved"
+    },
+    "MSG07": {
+      "ar": "يوجد تقرير طبي تحت الإجراء للمراجع، وحالته {status}",
+      "en": "A medical report that is in progress exists for the applicant, its status \"{status}\"",
+      "interpolates": ["status"]
+    },
+    "MSG10": {
+      "ar": "هل أنت متأكد من حفظ التقرير للإرسال لاحقاً؟",
+      "en": "System will save the medical report for later submission, are you sure?"
+    },
+    "MSG11": {
+      "ar": "يرجى كتابة الملاحظات قبل إعادة التقرير إلى مدخل البيانات",
+      "en": "Please type the notes before sending the medical report back to data entry"
+    },
+    "MSG15": {
+      "ar": "سيتم إرسال التقرير لمراجعته من قبل المدقق، هل أنت متأكد؟ (علماً بأن نتيجة الفحص هي لائق)",
+      "en": "The medical report will be sent to the Auditor, are you sure? (Be advised that its result is Fit)"
+    },
+    "MSG16": {
+      "ar": "سيتم إرسال التقرير لمراجعته من قبل المدقق، هل أنت متأكد؟ (علماً بأن نتيجة الفحص هي غير لائق)",
+      "en": "The medical report will be sent to the Auditor, are you sure? (Be advised that its result is Not Fit)"
+    },
+    "MSG17": {
+      "ar": "سيتم اعتماد التقرير الطبي (نتيجته لائق) ومشاركته مع الجهات المختصة، هل أنت متأكد؟",
+      "en": "A medical report with result of \"Fit\" will be approved and shared with whom concerned, are you sure?"
+    },
+    "MSG18": {
+      "ar": "سيتم اعتماد التقرير الطبي (نتيجته غير لائق) ومشاركته مع الجهات المختصة، هل أنت متأكد؟",
+      "en": "A medical report with result of \"Not Fit\" will be approved and shared with whom concerned, are you sure?"
+    }
+  }
+}

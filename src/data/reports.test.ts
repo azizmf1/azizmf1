@@ -2,6 +2,12 @@ import { describe, it, expect, beforeEach } from "vitest";
 import {
   SEED,
   emptyReport,
+  emptyVisualAcuity,
+  emptyEligibility,
+  findUniquenessBlock,
+  expirePriorNotFit,
+  isReportExpired,
+  validUntil,
   listReports,
   getReport,
   saveReport,
@@ -29,12 +35,12 @@ describe("بذرة البيانات", () => {
   });
 
   it("getReport يجد تقريرًا موجودًا في البذرة", () => {
-    expect(getReport("HM-2026-1001")?.applicant.name).toBeTruthy();
+    expect(getReport("HLR26000000001")?.applicant.name).toBeTruthy();
     expect(getReport("لا-يوجد")).toBeUndefined();
   });
 
   it("resetSeed يعيد البذرة الكاملة", () => {
-    deleteReport("HM-2026-1001");
+    deleteReport("HLR26000000001");
     expect(listReports()).toHaveLength(11);
     resetSeed();
     expect(listReports()).toHaveLength(12);
@@ -50,8 +56,8 @@ describe("emptyReport / nextId", () => {
     expect(r.doctor.id).toBe(doctor.id);
   });
 
-  it("nextId يولّد معرّفًا بالصيغة HM-2026-XXXX", () => {
-    expect(nextId()).toMatch(/^HM-2026-\d{4}$/);
+  it("nextId يولّد معرّفًا بالصيغة HLR[YY][9]", () => {
+    expect(nextId()).toMatch(/^HLR\d{2}\d{9}$/);
   });
 });
 
@@ -64,10 +70,10 @@ describe("CRUD", () => {
 
   it("saveReport يحدّث تقريرًا موجودًا دون تكرار", () => {
     const before = listReports().length;
-    const updated = { ...getReport("HM-2026-1004")!, status: "submitted" as const };
+    const updated = { ...getReport("HLR26000000004")!, status: "pending_audit" as const };
     saveReport(updated);
     expect(listReports()).toHaveLength(before);
-    expect(getReport("HM-2026-1004")?.status).toBe("submitted");
+    expect(getReport("HLR26000000004")?.status).toBe("pending_audit");
   });
 
   it("deleteReport يحذف التقرير", () => {
@@ -75,6 +81,85 @@ describe("CRUD", () => {
     saveReport(r);
     deleteReport(r.id);
     expect(getReport(r.id)).toBeUndefined();
+  });
+});
+
+describe("emptyReport يحتوي بنى BRS §6", () => {
+  it("ينشئ حدّة إبصار وأهلية افتراضية", () => {
+    const r = emptyReport(doctor);
+    expect(r.visualAcuity).toEqual(emptyVisualAcuity());
+    expect(r.eligibility).toEqual(emptyEligibility());
+    expect(r.notFitJustification).toBe("");
+  });
+});
+
+describe("BR-UNIQUE-REPORT — findUniquenessBlock", () => {
+  it("يمنع عند وجود تقرير ساري (مكتمل حديثًا) → valid", () => {
+    const block = findUniquenessBlock("1098234571");
+    expect(block?.kind).toBe("valid");
+  });
+
+  it("يمنع عند وجود تقرير تحت الإجراء → in_progress", () => {
+    const block = findUniquenessBlock("1076551203");
+    expect(block?.kind).toBe("in_progress");
+  });
+
+  it("يُعفي التقرير المنتهي", () => {
+    // HLR26000000008 منتهٍ لرقم 1088990011
+    expect(findUniquenessBlock("1088990011")).toBeNull();
+  });
+
+  it("لا يمنع رقمًا جديدًا", () => {
+    expect(findUniquenessBlock("1500000009")).toBeNull();
+  });
+
+  it("يتجاهل التقرير الحالي عبر excludeId", () => {
+    const self = getReport("HLR26000000002")!; // pending لنفس الرقم
+    expect(
+      findUniquenessBlock(self.applicant.nationalId, self.id),
+    ).toBeNull();
+  });
+});
+
+describe("الصلاحية — isReportExpired / validUntil", () => {
+  const base = emptyReport(doctor);
+  it("مكتمل حديث الاعتماد: ساري + له تاريخ انتهاء", () => {
+    const r = {
+      ...base,
+      status: "completed" as const,
+      decidedAt: new Date().toISOString(),
+    };
+    expect(isReportExpired(r)).toBe(false);
+    expect(validUntil(r)).toBeTruthy();
+  });
+  it("مكتمل تجاوز 360 يومًا: منتهٍ", () => {
+    const old = new Date();
+    old.setDate(old.getDate() - 400);
+    const r = {
+      ...base,
+      status: "completed" as const,
+      decidedAt: old.toISOString(),
+    };
+    expect(isReportExpired(r)).toBe(true);
+  });
+  it("حالة expired: منتهٍ دائمًا، ولا تاريخ صلاحية للمسودة", () => {
+    expect(isReportExpired({ ...base, status: "expired" })).toBe(true);
+    expect(validUntil(base)).toBeNull();
+  });
+});
+
+describe("expirePriorNotFit (BR08)", () => {
+  it("ينقل تقريرًا سابقًا غير لائق معتمد إلى منتهٍ", () => {
+    const r = {
+      ...emptyReport(doctor),
+      status: "completed" as const,
+      result: "unfit" as const,
+      applicant: { ...emptyReport(doctor).applicant, nationalId: "1234509876" },
+      decidedAt: new Date().toISOString(),
+    };
+    saveReport(r);
+    expirePriorNotFit("1234509876");
+    expect(getReport(r.id)?.status).toBe("expired");
   });
 });
 
